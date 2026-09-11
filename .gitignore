@@ -1,0 +1,7 @@
+config/conexiones.local.json
+diagnostico_controlops.json
+*.xlsm
+*.xlsx
+!ControlOps360_Propuesta_V1.xlsx
+__pycache__/
+

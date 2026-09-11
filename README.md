@@ -2,7 +2,7 @@
 
 Propuesta V1 de un motor único para la gestión operativa de tienda. El proyecto integra conexiones de Excel sin modificar los libros fuente y prepara una sola experiencia de actualización, validación e histórico.
 
-Nombre de repositorio sugerido: `sbx-mex/ControlOps_360`. Este paquete es independiente y no requiere modificar proyectos existentes.
+Repositorio: `sbx-mex/ControlOps-360`. Este proyecto es independiente y no requiere modificar proyectos existentes.
 
 ## Objetivo
 
@@ -51,8 +51,7 @@ La arquitectura, contrato de datos, maqueta, auditor y módulos VBA están listo
 
 ## Crear el repositorio nuevo
 
-1. Crear un repositorio vacío llamado `ControlOps_360`.
-2. Extraer este ZIP en la raíz.
-3. Subir todo el contenido y ejecutar la validación incluida en `.github/workflows/validar-v1.yml`.
-4. Mantener privados los Excel operativos; el `.gitignore` excluye `.xlsx` y `.xlsm`, salvo la maqueta sin datos.
-
+1. Mantener los Excel operativos fuera del repositorio.
+2. Usar `config/conexiones.example.json` como plantilla y guardar la versión local como `config/conexiones.local.json`.
+3. Proponer cualquier cambio mediante una rama y Pull Request.
+4. Ejecutar la validación incluida en `.github/workflows/validar-v1.yml` antes de integrar.
