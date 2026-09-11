@@ -1,0 +1,70 @@
+{
+  "proyecto": "ControlOps 360",
+  "version": "1.0.0-propuesta",
+  "portada_visible": "PORTADA",
+  "ocultar_motor_como": "veryHidden",
+  "politicas": {
+    "modificar_fuentes": false,
+    "base_21_dias_solo_lectura": true,
+    "acumulacion_idempotente": true,
+    "bloquear_si_faltan_columnas_clave": true
+  },
+  "modulos": [
+    {
+      "id": "auditoria_tienda",
+      "archivo_patron": "*Auditoria*Tienda*.xls*",
+      "hojas_aceptadas": ["Auditoria Tienda", "Auditoria_Tienda", "Transacciones"],
+      "tablas_aceptadas": ["tAuditoriaTienda", "tblAuditoriaTienda"],
+      "tabla_destino": "tAlertasNegativos",
+      "modo": "reemplazar_validacion",
+      "columnas_clave": ["CeCo", "Fecha", "Transaccion"],
+      "regla": "Cantidad < 0 OR Importe < 0"
+    },
+    {
+      "id": "inventario_21_dias",
+      "archivo_patron": "*Gestion*Inventario*.xls*",
+      "hojas_aceptadas": ["Dias Stock", "Clasificacion", "Base 21 dias"],
+      "tablas_aceptadas": ["tInventario21D", "tblInventario21D"],
+      "tabla_destino": "tInventario21D",
+      "modo": "solo_lectura",
+      "columnas_clave": ["CeCo", "Fecha", "IDTienda", "CodigoArticulo"]
+    },
+    {
+      "id": "historico_inventario",
+      "archivo_patron": "*Historico*Inventario*.xls*",
+      "hojas_aceptadas": ["Uso", "Merma", "Variacion"],
+      "tablas_aceptadas": ["tUso", "tMerma", "tVariacion"],
+      "tabla_destino": "tHistoricoInventario",
+      "modo": "anexar_sin_duplicados",
+      "columnas_clave": ["CeCo", "FechaCorte", "CodigoArticulo", "Metrica"]
+    },
+    {
+      "id": "max_min",
+      "archivo_patron": "*Max*Min*.xls*",
+      "hojas_aceptadas": ["Pick_Pack", "Unidad"],
+      "tablas_aceptadas": ["tMaxMinPickPack", "tMaxMinUnidad"],
+      "tabla_destino": "tMaxMinNormalizado",
+      "modo": "reemplazar",
+      "columnas_clave": ["CeCo", "FechaCorte", "CodigoArticulo", "TipoEmpaque"]
+    },
+    {
+      "id": "peak_hour",
+      "archivo_patron": "*Peak*Hour*.xls*",
+      "hojas_aceptadas": ["Dashboard_PeakHour", "Foco_PH"],
+      "tablas_aceptadas": ["tPeakHour", "tFocoPH"],
+      "tabla_destino": "tPeakHourNormalizado",
+      "modo": "reemplazar",
+      "columnas_clave": ["CeCo", "Semana", "Dia", "TimePeriod"]
+    },
+    {
+      "id": "bebida_alimento",
+      "archivo_patron": "*Bebida*Alimento*.xls*",
+      "hojas_aceptadas": ["Bebidas", "Alimentos", "Resumen"],
+      "tablas_aceptadas": ["tBebidas", "tAlimentos", "tResumenBA"],
+      "tabla_destino": "tReporteNormalizadoV2",
+      "modo": "reemplazar",
+      "columnas_clave": ["CeCo", "Fecha", "CodigoArticulo", "TipoProducto"]
+    }
+  ]
+}
+
