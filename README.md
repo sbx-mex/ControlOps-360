@@ -4,6 +4,12 @@ Propuesta V1 de un motor único para la gestión operativa de tienda. El proyect
 
 Repositorio: `sbx-mex/ControlOps-360`. Este proyecto es independiente y no requiere modificar proyectos existentes.
 
+## Aplicación pública
+
+Abrir: [https://sbx-mex.github.io/ControlOps-360/](https://sbx-mex.github.io/ControlOps-360/)
+
+La interfaz analiza libros `.xlsx` y `.xlsm` directamente en el navegador, sin enviarlos a un servidor. Incluye una demostración, detección de módulos, vistas por pestaña, alertas de transacciones negativas y exportación de un diagnóstico sin valores operativos.
+
 ## Objetivo
 
 - Conservar intacta la base móvil de inventario de 21 días.
