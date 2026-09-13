@@ -136,8 +136,36 @@ function wrap(value,width,size=9) {
   if((line+" "+word).trim().length>limit){lines.push(line);line=word;}else line=(line+" "+word).trim();
  }if(line)lines.push(line);return lines.length?lines:[""];
 }
+function pdfFromPages(pages){
+ const objects=["<< /Type /Catalog /Pages 2 0 R >>","", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>","<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"],kids=[];
+ pages.forEach((source,i)=>{let stream=source+`\nBT /F1 7 Tf 0.3 0.4 0.3 rg 700 14 Td (Hoja ${i+1} de ${pages.length}) Tj ET`;const pageId=objects.length+1,contentId=pageId+1;kids.push(pageId+" 0 R");objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 792 612] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`);objects.push(`<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}\nendstream`);});
+ objects[1]=`<< /Type /Pages /Kids [${kids.join(" ")}] /Count ${pages.length} >>`;
+ let pdf="%PDF-1.4\n",offsets=[0];objects.forEach((obj,i)=>{offsets.push(encoder.encode(pdf).length);pdf+=`${i+1} 0 obj\n${obj}\nendobj\n`;});
+ const xref=encoder.encode(pdf).length;pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;offsets.slice(1).forEach(offset=>{pdf+=String(offset).padStart(10,"0")+" 00000 n \n";});pdf+=`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;return encoder.encode(pdf);
+}
+function createLabelPdf(report){
+ if(!report.cards?.length)throw new Error("Elige al menos un producto para imprimir.");
+ const pages=[],perPage=12,columns=3,margin=18,gapX=6,gapY=4,gridTop=558,gridBottom=26,cardW=(792-margin*2-gapX*(columns-1))/columns,cardH=(gridTop-gridBottom-gapY*3)/4;
+ for(let start=0;start<report.cards.length;start+=perPage){const commands=[],pageCards=report.cards.slice(start,start+perPage),text=(x,y,size,value,bold=false,align='left')=>{const at=align==='center'?x-String(value??'').length*size*.27:x;commands.push(`BT /F${bold?2:1} ${size} Tf 0.06 0.16 0.13 rg ${at} ${y} Td (${pdfEscape(value)}) Tj ET`);};
+  text(margin,590,12,report.title,true);text(margin,576,7.2,[report.store,report.period,report.filters].filter(Boolean).join(' · '));commands.push(`0 0.38 0.25 RG 0.8 w ${margin} 568 m ${792-margin} 568 l S`);
+  pageCards.forEach((card,index)=>{const row=Math.floor(index/columns),col=index%columns,x=margin+col*(cardW+gapX),top=gridTop-row*(cardH+gapY),bottom=top-cardH,secondary=card.name===card.sapName?card.microsName:card.sapName;
+   commands.push(`0.75 0.82 0.78 RG 0.6 w ${x} ${bottom} ${cardW} ${cardH} re S`);
+   wrap(card.name,cardW-16,8.2).slice(0,2).forEach((line,lineIndex)=>text(x+8,top-15-lineIndex*10,8.2,line,true));
+   if(secondary&&secondary!==card.name)text(x+8,top-37,6.2,wrap(secondary,cardW-16,6.2)[0]);
+   text(x+8,top-48,6.2,`SAP ${card.sap||'—'} · DIA ${card.dia||'—'}${card.adjusted?' · AJUSTADO':''}`);
+   text(x+8,top-59,6.5,`USO DIARIO ${NUMBER.format(card.daily)} ${String(card.mode==='pack'?'EN UNIDAD BASE':card.unit||'').toUpperCase()}` ,true);
+   commands.push(`0.84 0.88 0.85 RG 0.4 w ${x+6} ${top-65} m ${x+cardW-6} ${top-65} l S`);
+   text(x+cardW*.25,top-78,7,'MIN',true,'center');text(x+cardW*.75,top-78,7,'MAX',true,'center');
+   text(x+cardW*.25,top-101,17,card.minimum==null?'—':NUMBER.format(card.minimum),true,'center');text(x+cardW*.75,top-101,17,card.maximum==null?'—':NUMBER.format(card.maximum),true,'center');
+   commands.push(`0.84 0.88 0.85 RG 0.4 w ${x+6} ${bottom+17} m ${x+cardW-6} ${bottom+17} l S`);
+   const mode=card.mode==='pack'?'PICK PACK':'UNIDAD',unit=String(card.unit||'').toUpperCase(),footer=card.mode==='pack'&&unit&&unit!==mode?`${mode} · ${unit}`:mode;text(x+8,bottom+6,6.4,footer,true);
+  });pages.push(commands.join('\n'));
+ }
+ return pdfFromPages(pages);
+}
 export function createExecutivePdf(report) {
  if(!report?.sheets?.length)throw new Error("Este menú no tiene datos exportables.");
+ if(report.layout==='labels')return createLabelPdf(report);
  const pages=[];let commands=[],y=0;
  const text=(x,y,size,value,bold=false)=>commands.push(`BT /F${bold?2:1} ${size} Tf 0.06 0.16 0.13 rg ${x} ${y} Td (${pdfEscape(value)}) Tj ET`);
  const newPage=()=>{if(commands.length)pages.push(commands.join("\n"));commands=[];y=550;text(32,579,18,report.title,true);text(32,560,9,report.store+" · "+report.period);text(32,542,8,report.filters||"");y=522;};
@@ -171,16 +199,6 @@ export function createExecutivePdf(report) {
   y-=20;
  }
  if(commands.length)pages.push(commands.join("\n"));
- const objects=["<< /Type /Catalog /Pages 2 0 R >>","", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>","<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"];
- const kids=[];
- pages.forEach((stream,i)=>{const pageId=objects.length+1,contentId=pageId+1;kids.push(pageId+" 0 R");
-  const footer=`\nBT /F1 8 Tf 0.3 0.4 0.3 rg 680 20 Td (${i+1} / ${pages.length}) Tj ET`;
-  stream+=footer;objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 792 612] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`);objects.push(`<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}\nendstream`);
- });
- objects[1]=`<< /Type /Pages /Kids [${kids.join(" ")}] /Count ${pages.length} >>`;
- let pdf="%PDF-1.4\n",offsets=[0];objects.forEach((obj,i)=>{offsets.push(encoder.encode(pdf).length);pdf+=`${i+1} 0 obj\n${obj}\nendobj\n`;});
- const xref=encoder.encode(pdf).length;pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;
- offsets.slice(1).forEach(offset=>{pdf+=String(offset).padStart(10,"0")+" 00000 n \n";});pdf+=`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
- return encoder.encode(pdf);
+ return pdfFromPages(pages);
 }
 export function downloadBytes(bytes,name,mime){const url=URL.createObjectURL(new Blob([bytes],{type:mime})),a=document.createElement("a");a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}
