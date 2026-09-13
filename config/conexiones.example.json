@@ -57,14 +57,34 @@
       "columnas_clave": ["CeCo", "Semana", "Dia", "TimePeriod"]
     },
     {
-      "id": "bebida_alimento",
-      "archivo_patron": "*Bebida*Alimento*.xls*",
-      "hojas_aceptadas": ["Bebidas", "Alimentos", "Resumen"],
-      "tablas_aceptadas": ["tBebidas", "tAlimentos", "tResumenBA"],
-      "tabla_destino": "tReporteNormalizadoV2",
-      "modo": "reemplazar",
-      "columnas_clave": ["CeCo", "Fecha", "CodigoArticulo", "TipoProducto"]
+      "id": "normalizados",
+      "archivo_patron": "*Reporte*Normalizado*.xls*",
+      "hojas_aceptadas": [
+        "Tamanos",
+        "Vaso&Tapa",
+        "Crema Batida",
+        "base_cb",
+        "historico_cb",
+        "base_vaso",
+        "historico_vaso",
+        "Reglas"
+      ],
+      "tablas_aceptadas": [
+        "Detalle_CB",
+        "historicocb",
+        "detallevaso",
+        "historicovaso",
+        "Tabla5",
+        "reglavaso"
+      ],
+      "modo": "detectar_y_validar",
+      "bases_20_dias": ["Detalle_CB", "detallevaso"],
+      "historicos": ["historicocb", "historicovaso"],
+      "archivos_reglas": [
+        "tbl_normalizado_crema.xlsx",
+        "tbl_normalizado_vaso.xlsx"
+      ],
+      "columnas_clave": ["IDTienda", "FechaHora", "Ticket", "SecTrans", "IDProducto"]
     }
   ]
 }
-
