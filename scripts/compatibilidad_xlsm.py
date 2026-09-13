@@ -11,6 +11,7 @@ import sys
 import unicodedata
 import zipfile
 from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 from xml.etree import ElementTree as ET
@@ -106,6 +107,8 @@ class Source:
     rows: int
     columns: list[str]
     roles: list[str]
+    latest_date: str | None = None
+    observed_days: int = 0
 
 
 @dataclass(frozen=True)
@@ -116,6 +119,111 @@ class Result:
     sources: list[Source]
     kinds: list[str]
     reason: str | None = None
+
+
+def column_index(reference: str) -> int:
+    letters = "".join(re.findall(r"[A-Za-z]+", str(reference))).upper() or "A"
+    value = 0
+    for letter in letters:
+        value = value * 26 + ord(letter) - 64
+    return value - 1
+
+
+def cell_text(cell: ET.Element, shared_strings: list[str]) -> str:
+    value = cell.find(f"{{{NS_MAIN}}}v")
+    raw = value.text if value is not None and value.text is not None else ""
+    if cell.attrib.get("t") == "s":
+        try:
+            return shared_strings[int(raw)]
+        except (ValueError, IndexError):
+            return ""
+    if cell.attrib.get("t") == "inlineStr":
+        return "".join(node.text or "" for node in cell.findall(f".//{{{NS_MAIN}}}t"))
+    return raw
+
+
+def excel_date(value: str) -> str | None:
+    text = str(value or "").strip()
+    try:
+        number = float(text)
+        moment = datetime(1899, 12, 30, tzinfo=timezone.utc) + timedelta(days=number)
+        if 2000 <= moment.year <= 2100:
+            return moment.date().isoformat()
+    except (ValueError, OverflowError):
+        pass
+    for pattern, order in ((r"^(\d{4})-(\d{2})-(\d{2})", (1, 2, 3)), (r"^(\d{1,2})[/-](\d{1,2})[/-](\d{4})", (3, 2, 1))):
+        match = re.match(pattern, text)
+        if not match:
+            continue
+        try:
+            return datetime(*(int(match.group(index)) for index in order), tzinfo=timezone.utc).date().isoformat()
+        except ValueError:
+            return None
+    return None
+
+
+def date_stats(zf: zipfile.ZipFile, sheet_path: str, source: Source, shared_strings: list[str]) -> tuple[str | None, int]:
+    date_header = next((header for header in ("FechaHora", "Fecha") if header in source.columns), None)
+    if not date_header or sheet_path not in zf.namelist():
+        return None, 0
+    start_ref, end_ref = source.reference.split(":") if ":" in source.reference else (source.reference, source.reference)
+    start_row = int(re.search(r"\d+", start_ref).group())
+    end_row = int(re.search(r"\d+", end_ref).group())
+    target_column = column_index(start_ref) + source.columns.index(date_header)
+    dates: set[str] = set()
+    with zf.open(sheet_path) as stream:
+        for _, node in ET.iterparse(stream, events=("end",)):
+            if node.tag != f"{{{NS_MAIN}}}row":
+                continue
+            row_number = int(node.attrib.get("r", "0") or 0)
+            if start_row < row_number <= end_row:
+                for cell in node.findall(f"{{{NS_MAIN}}}c"):
+                    if column_index(cell.attrib.get("r", "A1")) == target_column:
+                        value = excel_date(cell_text(cell, shared_strings))
+                        if value:
+                            dates.add(value)
+                        break
+            node.clear()
+    return (max(dates), len(dates)) if dates else (None, 0)
+
+
+def motor_kind(result: Result) -> str:
+    kinds = set(result.kinds)
+    groups = []
+    if "venta" in kinds:
+        groups.append("venta")
+    if "uso" in kinds:
+        groups.append("uso")
+    if kinds & {"auditoria_ticket", "auditoria_void", "auditoria_pago"}:
+        groups.append("auditoria")
+    return "+".join(sorted(groups))
+
+
+def freshness_key(path: Path, result: Result) -> tuple[str, int, int, int]:
+    latest = max((source.latest_date or "" for source in result.sources), default="")
+    coverage = max((source.observed_days for source in result.sources), default=0)
+    modified = path.stat().st_mtime_ns if path.exists() else 0
+    rows = sum(source.rows for source in result.sources)
+    return latest, coverage, modified, rows
+
+
+def select_most_recent(items: Iterable[tuple[Path, Result]]) -> tuple[list[Path], list[Path]]:
+    selected_parameters: list[Path] = []
+    winners: dict[str, tuple[Path, Result]] = {}
+    superseded: list[Path] = []
+    for path, result in items:
+        kind = motor_kind(result)
+        if not kind:
+            selected_parameters.append(path)
+            continue
+        current = winners.get(kind)
+        if current is None or freshness_key(path, result) > freshness_key(*current):
+            if current is not None:
+                superseded.append(current[0])
+            winners[kind] = (path, result)
+        else:
+            superseded.append(path)
+    return selected_parameters + [item[0] for item in winners.values()], superseded
 
 
 def inspect_workbook(path: Path) -> Result:
@@ -169,6 +277,12 @@ def inspect_workbook(path: Path) -> Result:
             selected = [source for source in selected if any(role in allowed for role in source.roles)]
             useful = any(role in (parameter_roles if suffix == ".xlsx" else {"venta", "uso", "auditoria_ticket", "auditoria_void", "auditoria_pago"}) for source in selected for role in source.roles)
             if selected and useful:
+                shared_strings: list[str] = []
+                if "xl/sharedStrings.xml" in names:
+                    shared_root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
+                    shared_strings = ["".join(node.text or "" for node in item.findall(f".//{{{NS_MAIN}}}t")) for item in shared_root.findall(f"{{{NS_MAIN}}}si")]
+                sheet_paths = dict(sheets)
+                selected = [Source(source.sheet, source.table, source.reference, source.rows, source.columns, source.roles, *date_stats(zf, sheet_paths.get(source.sheet, ""), source, shared_strings)) for source in selected]
                 kinds = sorted({role for source in selected for role in source.roles})
                 return Result(path.name, True, macro_enabled, selected, kinds)
 
@@ -206,10 +320,13 @@ def main() -> int:
         parser.error("Indica al menos un archivo .xlsm o una carpeta --fuentes")
 
     results = [inspect_workbook(path) for path in files]
+    selected, superseded = select_most_recent((path, result) for path, result in zip(files, results) if result.compatible)
     payload = {
         "compatible": all(result.compatible for result in results),
         "files": len(results),
         "compatible_files": sum(result.compatible for result in results),
+        "selected_files": [path.name for path in selected],
+        "superseded_files": [path.name for path in superseded],
         "results": [asdict(result) for result in results],
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))

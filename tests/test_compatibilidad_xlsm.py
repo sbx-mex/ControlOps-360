@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from datetime import date, timedelta
 from pathlib import Path
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "compatibilidad_xlsm.py"
@@ -16,7 +17,15 @@ DOC_REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 PKG_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 
-def make_xlsm(path: Path, tables: list[tuple[str, str, list[str]]], macros: bool = True) -> None:
+def excel_column(index: int) -> str:
+    value = ""
+    while index:
+        index, remainder = divmod(index - 1, 26)
+        value = chr(65 + remainder) + value
+    return value
+
+
+def make_xlsm(path: Path, tables: list[tuple[str, str, list[str]]], macros: bool = True, first_day: date = date(2026, 8, 24)) -> None:
     sheets_xml = []
     workbook_rels = []
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -33,11 +42,21 @@ def make_xlsm(path: Path, tables: list[tuple[str, str, list[str]]], macros: bool
                 f'<tableColumn id="{column_index}" name="{header}"/>'
                 for column_index, header in enumerate(headers, 1)
             )
-            end_column = chr(64 + len(headers))
+            end_column = excel_column(len(headers))
             zf.writestr(
                 f"xl/tables/table{index}.xml",
                 f'<table xmlns="{MAIN}" name="{table_name}" displayName="{table_name}" ref="A1:{end_column}11">'
                 f'<tableColumns count="{len(headers)}">{columns}</tableColumns></table>',
+            )
+            date_header = next((header for header in ("FechaHora", "Fecha") if header in headers), None)
+            date_column = excel_column(headers.index(date_header) + 1) if date_header else "A"
+            date_rows = "".join(
+                f'<row r="{row}"><c r="{date_column}{row}" t="inlineStr"><is><t>{first_day + timedelta(days=row - 2)}</t></is></c></row>'
+                for row in range(2, 12)
+            ) if date_header else ""
+            zf.writestr(
+                f"xl/worksheets/sheet{index}.xml",
+                f'<worksheet xmlns="{MAIN}"><sheetData>{date_rows}</sheetData></worksheet>',
             )
         zf.writestr(
             "xl/workbook.xml",
@@ -99,6 +118,21 @@ class CompatibilityTests(unittest.TestCase):
             files = MOD.find_files([], [root])
             self.assertEqual(len(files), 2)
             self.assertTrue(all(MOD.inspect_xlsm(path).compatible for path in files))
+
+    def test_duplicate_motor_uses_latest_internal_date_not_filename(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            headers = list(MOD.STRUCTURES["uso"])
+            old_path = root / "Motor_02_Uso_Stock (9).xlsm"
+            new_path = root / "descarga.xlsm"
+            make_xlsm(old_path, [("uso_ac", "uso_ac", headers)], first_day=date(2026, 8, 1))
+            make_xlsm(new_path, [("uso_ac", "uso_ac", headers)], first_day=date(2026, 9, 1))
+            old_result, new_result = MOD.inspect_xlsm(old_path), MOD.inspect_xlsm(new_path)
+            selected, superseded = MOD.select_most_recent([(new_path, new_result), (old_path, old_result)])
+            self.assertEqual(selected, [new_path])
+            self.assertEqual(superseded, [old_path])
+            self.assertEqual(new_result.sources[0].latest_date, "2026-09-10")
+            self.assertEqual(new_result.sources[0].observed_days, 10)
 
     def test_xlsx_is_accepted_only_as_known_parameter(self):
         with tempfile.TemporaryDirectory() as folder:

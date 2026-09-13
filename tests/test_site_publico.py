@@ -73,7 +73,9 @@ class SitioPublicoTests(unittest.TestCase):
     def test_loading_confirmation_and_ceco_lock(self):
         self.assertIn('id="loading"', self.html)
         self.assertIn('id="confirmation"', self.html)
-        self.assertIn("mergeDataset(state.dataset,incoming.dataset)", self.ui.replace(" ", ""))
+        self.assertIn("selectRecentWorkbooks", self.ui)
+        self.assertIn("Promise.all", self.ui)
+        self.assertIn("fecha interna más reciente", self.ui)
         self.assertIn("Compostable:", self.ui)
     def test_import_graph_is_self_contained(self):
         for p in (ROOT / "assets").glob("*"):

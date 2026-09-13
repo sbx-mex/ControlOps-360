@@ -146,14 +146,14 @@ function structuralTypes(headers) {
 }
 
 async function tableCandidates(zip, sheets) {
-  const candidates = [];
-  for (const sheet of sheets) {
+  const bySheet = await Promise.all(sheets.map(async (sheet) => {
+    const candidates = [];
     const relPath = relationPath(sheet.path);
-    if (!zip.has(relPath)) continue;
+    if (!zip.has(relPath)) return candidates;
     const rels = relationships(parseXml(await zip.text(relPath), relPath));
-    for (const target of rels.values()) {
+    const tables = await Promise.all([...rels.values()].map(async (target) => {
       const tablePath = resolvePath(sheet.path, target);
-      if (!/^xl\/tables\/[^/]+\.xml$/i.test(tablePath) || !zip.has(tablePath)) continue;
+      if (!/^xl\/tables\/[^/]+\.xml$/i.test(tablePath) || !zip.has(tablePath)) return null;
       const xml = parseXml(await zip.text(tablePath), tablePath);
       const root = xml.documentElement;
       const headers = [...xml.getElementsByTagName("tableColumn")].map((node) => node.getAttribute("name") || "");
@@ -162,17 +162,19 @@ async function tableCandidates(zip, sheets) {
         if (["sales", "usage", "auditTicket", "auditVoid", "auditPayment"].includes(type)) return isAcSource(sheet.name);
         return Object.hasOwn(CATALOG_FIELDS, type);
       });
-      if (roles.length) candidates.push({
+      return roles.length ? {
         sheetName: sheet.name,
         sheetPath: sheet.path,
         sourceName: root.getAttribute("displayName") || root.getAttribute("name") || sheet.name,
         ref: root.getAttribute("ref") || "A1:A1",
         headers,
         roles,
-      });
-    }
-  }
-  return candidates;
+      } : null;
+    }));
+    candidates.push(...tables.filter(Boolean));
+    return candidates;
+  }));
+  return bySheet.flat();
 }
 
 async function sharedStrings(zip) {
@@ -212,12 +214,13 @@ export async function inspectWorkbook(file, progress=()=>{}) {
  const macro=/\.xlsm$/i.test(file.name),parameter=/\.xlsx$/i.test(file.name);
  if(!macro&&!parameter)throw new Error("Usa XLSM o un parámetro XLSX.");
  if(file.size>MAX_FILE_BYTES)throw new Error("El archivo supera 100 MB.");
- const buffer=await file.arrayBuffer(),fingerprint=await sha256(buffer),zip=new ZipWorkbook(buffer);
+ const buffer=await file.arrayBuffer(),fingerprintPromise=sha256(buffer),zip=new ZipWorkbook(buffer);
  if(!zip.has("xl/workbook.xml")||!zip.has("xl/_rels/workbook.xml.rels")||(macro&&!zip.has("xl/vbaProject.bin")))throw new Error("El libro no es válido.");
- const candidates=await tableCandidates(zip,await workbookSheets(zip));
+ const [sheets,strings,fingerprint]=await Promise.all([workbookSheets(zip),sharedStrings(zip),fingerprintPromise]);
+ const candidates=await tableCandidates(zip,sheets);
  const allowed=macro?[...FACT_TYPES,...Object.keys(CATALOG_FIELDS)]:["woe","baking","storePolicy","compostable","food","drink","cream"];
  if(!candidates.some(c=>c.roles.some(r=>macro?FACT_TYPES.includes(r):allowed.includes(r))))throw new Error(parameter ? "El XLSX no es un parámetro compatible." : "No contiene tablas _ac compatibles.");
- const strings=await sharedStrings(zip),local=createDataset(),sources=[];
+ const local=createDataset(),sources=[];
  for(const candidate of candidates){
   const roles=candidate.roles.filter(r=>allowed.includes(r));
   if(!roles.length)continue;
@@ -234,5 +237,5 @@ export async function inspectWorkbook(file, progress=()=>{}) {
   sources.push({sheet:candidate.sheetName,roles,rows});
  }
  if(macro&&!local.sourceRows)throw new Error("No hay datos _ac actualizados en este motor.");
- return {dataset:local,name:file.name,fingerprint,sources};
+ return {dataset:local,name:file.name,fingerprint,sources,lastModified:Number(file.lastModified)||0};
 }
