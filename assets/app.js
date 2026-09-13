@@ -1,44 +1,51 @@
 "use strict";
 
-import { addRows, createDataset, isAcSource, matchStructure, mergeDataset, rollupRows } from "./engine.mjs";
+import {
+  addReferenceRows, addRows, addUsageRows, buildExecutiveSummary, buildUsageSummary,
+  classifyStructure, createDataset, getFilterOptions, isAcSource, mergeDataset, normalize,
+} from "./engine.mjs";
+import { createExecutivePdf, createExecutiveWorkbook, downloadBytes } from "./export.mjs";
 
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
 const MAX_ENTRY_BYTES = 220 * 1024 * 1024;
 const MAX_TOTAL_UNCOMPRESSED = 700 * 1024 * 1024;
-const PREVIEW_LIMIT = 100;
+const OVERRIDE_KEY = "controlops360-minimos-v3";
 
 const state = {
   dataset: createDataset(),
   files: [],
   fingerprints: new Set(),
-  activeView: "summary",
   loading: false,
+  initializedFilters: false,
+  summary: null,
+  usage: null,
+  overrides: loadOverrides(),
 };
 
-const elements = Object.fromEntries([
-  "fileInput", "uploadButton", "resetButton", "dropZone", "emptyState", "dashboard", "filesMetric",
-  "storesMetric", "rowsMetric", "duplicatesMetric", "transactionsMetric", "productsMetric", "exceptionsMetric",
-  "fileList", "viewNav", "viewTitle", "viewMeta", "dataTable", "tableEmpty", "toast", "progressText",
-].map((id) => [id, document.getElementById(id)]));
+const ids = [
+  "fileInput", "uploadButton", "resetButton", "excelButton", "pdfButton", "dropZone", "emptyState", "dashboard",
+  "progressText", "storeFilter", "dateFrom", "dateTo", "weekdayFilter", "modeFilter", "productFilter", "clearFilters",
+  "storeTitle", "periodTitle", "sourceSummary", "fileList", "salesMetric", "ordersMetric", "ticketMetric", "uptMetric",
+  "peakAmTime", "peakAmOrders", "peakPmTime", "peakPmOrders", "focusList", "peakTable", "productTable", "productCount",
+  "channelBars", "inventoryPanel", "usagePeriod", "usageTotalHeader", "ordersFilter", "compostableFilter", "usageFilter", "usageTable", "toast",
+];
+const elements = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
+const MONEY = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
+const NUMBER = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 1 });
 
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+function loadOverrides() {
+  try { return JSON.parse(localStorage.getItem(OVERRIDE_KEY) || "{}"); } catch (_) { return {}; }
 }
 
-function formatNumber(value, digits = 0) {
-  return new Intl.NumberFormat("es-MX", { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(value || 0);
+function escapeHtml(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
 function showToast(message) {
   elements.toast.textContent = message;
   elements.toast.hidden = false;
   window.clearTimeout(showToast.timer);
-  showToast.timer = window.setTimeout(() => { elements.toast.hidden = true; }, 4200);
+  showToast.timer = window.setTimeout(() => { elements.toast.hidden = true; }, 3800);
 }
 
 function setProgress(message = "") {
@@ -82,7 +89,7 @@ class ZipWorkbook {
       if (uncompressedSize > MAX_ENTRY_BYTES) throw new Error("Una sección del libro excede el límite seguro.");
       uncompressedTotal += uncompressedSize;
       if (uncompressedTotal > MAX_TOTAL_UNCOMPRESSED) throw new Error("El libro excede el límite seguro de descompresión.");
-      this.entries.set(name, { method, compressedSize, uncompressedSize, localOffset });
+      this.entries.set(name, { method, compressedSize, localOffset });
       offset += 46 + nameLength + extraLength + commentLength;
     }
   }
@@ -93,7 +100,6 @@ class ZipWorkbook {
     const entry = this.entries.get(name);
     if (!entry) throw new Error(`No se encontró ${name}.`);
     const local = entry.localOffset;
-    if (this.view.getUint32(local, true) !== 0x04034b50) throw new Error("Entrada ZIP dañada.");
     const nameLength = this.view.getUint16(local + 26, true);
     const extraLength = this.view.getUint16(local + 28, true);
     const start = local + 30 + nameLength + extraLength;
@@ -115,6 +121,7 @@ function parseXml(text, label) {
 }
 
 function dirname(path) { return path.split("/").slice(0, -1).join("/"); }
+function relationPath(path) { return `${dirname(path)}/_rels/${path.split("/").at(-1)}.rels`; }
 
 function resolvePath(base, target) {
   if (target.startsWith("/")) return target.slice(1);
@@ -122,21 +129,13 @@ function resolvePath(base, target) {
   const resolved = [];
   for (const part of parts) {
     if (!part || part === ".") continue;
-    if (part === "..") resolved.pop();
-    else resolved.push(part);
+    if (part === "..") resolved.pop(); else resolved.push(part);
   }
   return resolved.join("/");
 }
 
-function relationPath(path) {
-  const name = path.split("/").at(-1);
-  return `${dirname(path)}/_rels/${name}.rels`;
-}
-
 function relationships(xml) {
-  return new Map([...xml.getElementsByTagName("Relationship")].map((node) => [
-    node.getAttribute("Id"), node.getAttribute("Target"),
-  ]));
+  return new Map([...xml.getElementsByTagName("Relationship")].map((node) => [node.getAttribute("Id"), node.getAttribute("Target")]));
 }
 
 function columnIndex(reference) {
@@ -147,7 +146,7 @@ function columnIndex(reference) {
 function parseRange(reference) {
   const [start, end = start] = String(reference || "A1:A1").split(":");
   const row = (cell) => Number(cell.match(/\d+/)?.[0] || 1);
-  return { startRow: row(start), endRow: row(end), startCol: columnIndex(start), endCol: columnIndex(end) };
+  return { startRow: row(start), endRow: row(end), startCol: columnIndex(start) };
 }
 
 function cellText(cell, sharedStrings) {
@@ -167,15 +166,18 @@ async function sha256(buffer) {
 
 async function workbookSheets(zip) {
   const workbook = parseXml(await zip.text("xl/workbook.xml"), "workbook.xml");
-  const relationFile = "xl/_rels/workbook.xml.rels";
-  const rels = relationships(parseXml(await zip.text(relationFile), relationFile));
+  const rels = relationships(parseXml(await zip.text("xl/_rels/workbook.xml.rels"), "workbook.xml.rels"));
   return [...workbook.getElementsByTagName("sheet")].map((node) => {
     const id = node.getAttribute("r:id") || node.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
-    return {
-      name: node.getAttribute("name") || "Hoja",
-      path: resolvePath("xl/workbook.xml", rels.get(id) || ""),
-    };
+    return { name: node.getAttribute("name") || "Hoja", path: resolvePath("xl/workbook.xml", rels.get(id) || "") };
   });
+}
+
+function structuralTypes(headers) {
+  const types = classifyStructure(headers);
+  const available = new Set(headers.map(normalize));
+  if (available.has("idtienda") && ["tienda", "nombretienda", "stname"].some((item) => available.has(item)) && !types.includes("store")) types.push("store");
+  return types;
 }
 
 async function tableCandidates(zip, sheets) {
@@ -190,14 +192,18 @@ async function tableCandidates(zip, sheets) {
       const xml = parseXml(await zip.text(tablePath), tablePath);
       const root = xml.documentElement;
       const headers = [...xml.getElementsByTagName("tableColumn")].map((node) => node.getAttribute("name") || "");
-      const structure = matchStructure(headers);
-      candidates.push({
+      const types = structuralTypes(headers);
+      const roles = types.filter((type) => {
+        if (["sales", "usage"].includes(type)) return isAcSource(sheet.name);
+        return ["product", "store", "stock", "compostable"].includes(type);
+      });
+      if (roles.length) candidates.push({
         sheetName: sheet.name,
         sheetPath: sheet.path,
         sourceName: root.getAttribute("displayName") || root.getAttribute("name") || sheet.name,
         ref: root.getAttribute("ref") || "A1:A1",
         headers,
-        structure,
+        roles,
       });
     }
   }
@@ -207,8 +213,7 @@ async function tableCandidates(zip, sheets) {
 async function sharedStrings(zip) {
   if (!zip.has("xl/sharedStrings.xml")) return [];
   const xml = parseXml(await zip.text("xl/sharedStrings.xml"), "sharedStrings.xml");
-  return [...xml.getElementsByTagName("si")].map((item) =>
-    [...item.getElementsByTagName("t")].map((node) => node.textContent || "").join(""));
+  return [...xml.getElementsByTagName("si")].map((item) => [...item.getElementsByTagName("t")].map((node) => node.textContent || "").join(""));
 }
 
 async function rowsFromTable(zip, candidate, strings, onBatch) {
@@ -229,7 +234,7 @@ async function rowsFromTable(zip, candidate, strings, onBatch) {
     processed += 1;
     if (batch.length >= 2500) {
       onBatch(batch.splice(0));
-      setProgress(`${candidate.sheetName}: ${formatNumber(processed)} filas leídas`);
+      setProgress(`${candidate.sheetName}: ${NUMBER.format(processed)} filas`);
       await new Promise((resolve) => window.setTimeout(resolve, 0));
     }
   }
@@ -237,147 +242,167 @@ async function rowsFromTable(zip, candidate, strings, onBatch) {
   return processed;
 }
 
+const ROLE_LABEL = { sales: "Venta", usage: "Uso 21 días", product: "Productos", store: "CeCo", stock: "Presentaciones", compostable: "Compostable" };
+
 async function inspectXlsm(file) {
   if (!/\.xlsm$/i.test(file.name)) throw new Error("Solo se aceptan archivos .xlsm.");
-  if (file.size > MAX_FILE_BYTES) throw new Error("El archivo supera el límite de 100 MB.");
+  if (file.size > MAX_FILE_BYTES) throw new Error("El archivo supera 100 MB.");
   const buffer = await file.arrayBuffer();
   const fingerprint = await sha256(buffer);
-  if (state.fingerprints.has(fingerprint)) throw new Error("Este mismo archivo ya fue cargado, aunque tenga otro nombre.");
+  if (state.fingerprints.has(fingerprint)) throw new Error("Archivo repetido, aunque tenga otro nombre.");
   const zip = new ZipWorkbook(buffer);
-  if (!zip.has("xl/workbook.xml") || !zip.has("xl/_rels/workbook.xml.rels") || !zip.has("xl/vbaProject.bin")) {
-    throw new Error("No es un libro .xlsm compatible con macros.");
-  }
-
-  const sheets = await workbookSheets(zip);
-  const candidates = await tableCandidates(zip, sheets);
-  const compatible = candidates.filter((candidate) => candidate.structure.compatible);
-  const selected = compatible.filter((candidate) => isAcSource(candidate.sheetName));
-  if (!selected.length) {
-    const best = [...candidates].sort((a, b) => b.structure.matchedRequired - a.structure.matchedRequired)[0];
-    const detail = best?.structure.missing?.length ? ` Faltan: ${best.structure.missing.join(", ")}.` : "";
-    throw new Error(`No se encontró una pestaña _ac con la estructura requerida.${detail}`);
-  }
-
+  if (!zip.has("xl/workbook.xml") || !zip.has("xl/_rels/workbook.xml.rels") || !zip.has("xl/vbaProject.bin")) throw new Error("No es un XLSM válido.");
+  const candidates = await tableCandidates(zip, await workbookSheets(zip));
+  const useful = candidates.some((candidate) => candidate.roles.some((role) => ["sales", "usage", "compostable"].includes(role)));
+  if (!useful) throw new Error("No contiene un motor _ac ni clasificación compatible.");
   const strings = await sharedStrings(zip);
-  const fileDataset = createDataset();
+  const local = createDataset();
   const sources = [];
-  for (const candidate of selected) {
-    const beforeRows = fileDataset.sourceRows;
-    await rowsFromTable(zip, candidate, strings, (rows) => {
-      addRows(fileDataset, candidate.headers, rows, { fileName: file.name, sourceName: candidate.sourceName });
+  for (const candidate of candidates) {
+    const counts = Object.fromEntries(candidate.roles.map((role) => [role, 0]));
+    const rows = await rowsFromTable(zip, candidate, strings, (batch) => {
+      for (const role of candidate.roles) {
+        if (role === "sales") counts[role] += addRows(local, candidate.headers, batch, { fileName: file.name, sourceName: candidate.sourceName }).uniqueRows;
+        else if (role === "usage") counts[role] += addUsageRows(local, candidate.headers, batch, { fileName: file.name, sourceName: candidate.sourceName });
+        else counts[role] += addReferenceRows(local, role, candidate.headers, batch);
+      }
     });
-    sources.push({ name: candidate.sourceName, sheet: candidate.sheetName, rows: fileDataset.sourceRows - beforeRows });
+    sources.push({ name: candidate.sourceName, sheet: candidate.sheetName, roles: candidate.roles, rows, counts });
   }
-  const totals = mergeDataset(state.dataset, fileDataset);
+  const merged = mergeDataset(state.dataset, local);
   state.fingerprints.add(fingerprint);
-  return { name: file.name, compatible: true, fingerprint: fingerprint.slice(0, 12), sources, ...totals };
+  return { name: file.name, compatible: true, sources, fingerprint: fingerprint.slice(0, 12), ...merged };
 }
 
-function metric(id, value) { elements[id].textContent = formatNumber(value); }
+function currentFilters() {
+  return {
+    store: elements.storeFilter.value,
+    from: elements.dateFrom.value,
+    to: elements.dateTo.value,
+    weekday: elements.weekdayFilter.value,
+    mode: elements.modeFilter.value,
+    query: elements.productFilter.value,
+    orders: elements.ordersFilter.value,
+    compostable: elements.compostableFilter.value,
+    usageQuery: elements.usageFilter.value,
+  };
+}
 
-function renderMetrics() {
-  metric("filesMetric", state.files.filter((file) => file.compatible).length);
-  metric("storesMetric", state.dataset.stores.size);
-  metric("rowsMetric", state.dataset.uniqueRows);
-  metric("duplicatesMetric", state.dataset.duplicateRows);
-  metric("transactionsMetric", state.dataset.transactionCount);
-  metric("productsMetric", state.dataset.products.size);
-  metric("exceptionsMetric", state.dataset.exceptionCount);
+function syncSelect(select, items, label, valueOf = (item) => item, textOf = (item) => item) {
+  const previous = select.value;
+  select.innerHTML = `<option value="">${escapeHtml(label)}</option>${items.map((item) => `<option value="${escapeHtml(valueOf(item))}">${escapeHtml(textOf(item))}</option>`).join("")}`;
+  if ([...select.options].some((option) => option.value === previous)) select.value = previous;
+}
+
+function initializeFilters() {
+  const options = getFilterOptions(state.dataset);
+  syncSelect(elements.storeFilter, options.stores, "Todas", (item) => item.id, (item) => `${item.id} · ${item.name}`);
+  syncSelect(elements.modeFilter, options.modes, "Todos");
+  if (!state.initializedFilters) {
+    if (options.stores.length === 1) elements.storeFilter.value = options.stores[0].id;
+    elements.dateFrom.value = options.minDate;
+    elements.dateTo.value = options.maxDate;
+    state.initializedFilters = true;
+  }
+}
+
+function storeLabel() {
+  const selected = elements.storeFilter.selectedOptions[0];
+  return elements.storeFilter.value ? selected.textContent : "Todas las tiendas";
 }
 
 function renderFiles() {
-  elements.fileList.innerHTML = state.files.map((file) => `<li class="file-row ${file.compatible ? "ready" : "error"}">
-    <span class="file-status" aria-hidden="true">${file.compatible ? "✓" : "!"}</span>
-    <span><strong>${escapeHtml(file.name)}</strong><small>${file.compatible
-      ? `${file.sources.map((source) => escapeHtml(source.sheet)).join(", ")} · ${formatNumber(file.uniqueRows)} únicas · ${formatNumber(file.duplicateRows)} duplicadas`
-      : escapeHtml(file.error)}</small></span>
-  </li>`).join("");
+  const ready = state.files.filter((file) => file.compatible).length;
+  elements.sourceSummary.textContent = `${ready} archivo${ready === 1 ? "" : "s"} compatible${ready === 1 ? "" : "s"}`;
+  elements.fileList.innerHTML = state.files.map((file) => `<li class="${file.compatible ? "" : "error"}"><strong>${escapeHtml(file.name)}</strong><small>${file.compatible
+    ? [...new Set(file.sources.flatMap((source) => source.roles).map((role) => ROLE_LABEL[role]))].join(" · ")
+    : escapeHtml(file.error)}</small></li>`).join("");
 }
 
-function objectRows(items, columns) {
-  return items.map((item) => columns.map((column) => item[column.key]));
+function renderPeak(summary) {
+  elements.peakAmTime.textContent = summary.am.label;
+  elements.peakAmOrders.textContent = `${NUMBER.format(summary.am.average)} órdenes/día`;
+  elements.peakPmTime.textContent = summary.pm.label;
+  elements.peakPmOrders.textContent = `${NUMBER.format(summary.pm.average)} órdenes/día`;
+  elements.peakTable.innerHTML = summary.peakByWeekday.map((row) => `<tr><td><strong>${row.day}</strong></td><td>${row.am.label}</td><td class="number">${NUMBER.format(row.am.average)}</td><td>${row.pm.label}</td><td class="number">${NUMBER.format(row.pm.average)}</td></tr>`).join("");
 }
 
-function viewData(view) {
-  const dataset = state.dataset;
-  if (view === "exceptions") {
-    const columns = ["Archivo", "IDTienda", "FechaHora", "Ticket", "IDProducto", "Cantidad", "CantidadAjustada", "Total"]
-      .map((key) => ({ key, label: key }));
-    return { title: "Excepciones", note: "Valores negativos detectados en cantidad, cantidad ajustada o total.", columns, rows: objectRows(dataset.exceptions, columns) };
-  }
-  if (view === "products") {
-    const columns = [{ key: "id", label: "IDProducto" }, { key: "rows", label: "Registros" }, { key: "adjusted", label: "Cantidad ajustada" }, { key: "total", label: "Total" }];
-    return { title: "Productos", note: "Productos ordenados por número de registros.", columns, rows: objectRows(rollupRows(dataset.products), columns) };
-  }
-  if (view === "hours") {
-    const columns = [{ key: "id", label: "Hora" }, { key: "rows", label: "Registros" }, { key: "adjusted", label: "Cantidad ajustada" }, { key: "total", label: "Total" }];
-    const items = [...dataset.hours.values()].sort((a, b) => Number(a.id) - Number(b.id));
-    return { title: "Distribución por hora", note: "Lectura por hora de FechaHora.", columns, rows: objectRows(items, columns) };
-  }
-  if (view === "modes") {
-    const columns = [{ key: "id", label: "Modo de orden" }, { key: "rows", label: "Registros" }, { key: "adjusted", label: "Cantidad ajustada" }, { key: "total", label: "Total" }];
-    return { title: "Modo de orden", note: "Distribución consolidada de los archivos compatibles.", columns, rows: objectRows(rollupRows(dataset.modes), columns) };
-  }
-  if (view === "records") {
-    const columns = ["Archivo", "Fuente", "IDTienda", "FechaHora", "Ticket", "IDProducto", "Cantidad", "CantidadAjustada", "Total", "ModoOrdenDesc"]
-      .map((key) => ({ key, label: key }));
-    return { title: "Muestra de registros", note: "Primeros registros únicos; la fuente original no se modifica.", columns, rows: objectRows(dataset.preview, columns) };
-  }
-  const columns = [{ key: "metric", label: "Lectura" }, { key: "value", label: "Resultado" }];
-  const items = [
-    { metric: "Filas leídas desde _ac", value: dataset.sourceRows },
-    { metric: "Filas únicas", value: dataset.uniqueRows },
-    { metric: "Duplicados omitidos", value: dataset.duplicateRows },
-    { metric: "Filas sin IDProducto", value: dataset.missingProductRows },
-    { metric: "Filas con llave incompleta", value: dataset.invalidRows },
-    { metric: "Transacciones", value: dataset.transactionCount },
-    { metric: "Productos", value: dataset.products.size },
-    { metric: "Tiendas", value: dataset.stores.size },
-    { metric: "Excepciones negativas", value: dataset.exceptionCount },
-  ];
-  return { title: "Resumen de lectura", note: "Consolidado exclusivo de tablas _ac compatibles, sin duplicar la llave operativa.", columns, rows: objectRows(items, columns) };
+function renderProducts(summary) {
+  elements.productCount.textContent = `${NUMBER.format(summary.topProducts.length)} productos`;
+  elements.productTable.innerHTML = summary.topProducts.slice(0, 8).map((row) => `<tr><td><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.id)}${row.family ? ` · ${escapeHtml(row.family)}` : ""}</small></td><td class="number">${NUMBER.format(row.units)}</td><td class="number"><strong>${MONEY.format(row.sales)}</strong></td></tr>`).join("") || '<tr><td colspan="3">Sin datos en el filtro.</td></tr>';
 }
 
-function renderView() {
-  elements.viewNav.querySelectorAll("[data-view]").forEach((button) => {
-    const selected = button.dataset.view === state.activeView;
-    button.classList.toggle("active", selected);
-    button.setAttribute("aria-pressed", String(selected));
-  });
-  const view = viewData(state.activeView);
-  elements.viewTitle.textContent = view.title;
-  elements.viewMeta.textContent = `${view.note} ${formatNumber(view.rows.length)} fila(s) visibles.`;
-  elements.dataTable.querySelector("thead").innerHTML = `<tr>${view.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr>`;
-  elements.dataTable.querySelector("tbody").innerHTML = view.rows.slice(0, PREVIEW_LIMIT).map((row) => `<tr>${row.map((value, index) => {
-    const label = view.columns[index].label;
-    const numeric = typeof value === "number";
-    const shown = numeric ? formatNumber(value, /cantidad|total/i.test(label) ? 2 : 0) : value;
-    return `<td class="${numeric ? "number" : ""}">${escapeHtml(shown)}</td>`;
-  }).join("")}</tr>`).join("");
-  elements.tableEmpty.hidden = view.rows.length > 0;
-  elements.dataTable.parentElement.hidden = view.rows.length === 0;
+function renderChannels(summary) {
+  elements.channelBars.innerHTML = summary.modes.slice(0, 8).map((row) => `<div class="channel-row"><span>${escapeHtml(row.name)}</span><div class="channel-track"><div class="channel-fill" style="width:${Math.max(1, row.share * 100)}%"></div></div><strong>${Math.round(row.share * 100)}% · ${MONEY.format(row.sales)}</strong></div>`).join("") || "<span>Sin datos en el filtro.</span>";
+}
+
+function typeChip(value) {
+  if (value === true) return '<span class="type-chip yes">Compostable</span>';
+  if (value === false) return '<span class="type-chip">No compostable</span>';
+  return '<span class="type-chip">Sin clasificar</span>';
+}
+
+function renderUsage(usage) {
+  elements.inventoryPanel.hidden = !state.dataset.usageFacts.length;
+  if (!state.dataset.usageFacts.length) return;
+  elements.usagePeriod.textContent = `${usage.dateFrom || "—"} a ${usage.dateTo || "—"} · ${usage.days} días · factor ×${usage.factor || "—"}`;
+  elements.usageTotalHeader.textContent = `Uso ${usage.days} días`;
+  elements.usageTable.innerHTML = usage.items.slice(0, 150).map((row) => `<tr><td><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.id)} · ${escapeHtml(row.family)}</small></td><td>${typeChip(row.compostable)}</td><td class="number">${NUMBER.format(row.totalUse)}</td><td><input class="minimum-input" inputmode="decimal" aria-label="Uso mínimo diario de ${escapeHtml(row.name)}" data-key="${escapeHtml(`${row.store}|${row.id}`)}" value="${Number(row.minimum.toFixed(2))}"></td><td class="number"><strong>${NUMBER.format(row.maximum)}</strong></td><td>${escapeHtml(row.orderUnit)}<small>${NUMBER.format(row.pack)} por pedido</small></td><td class="number"><strong>${NUMBER.format(row.maxOrderUnits)}</strong></td></tr>`).join("") || '<tr><td colspan="7">Sin artículos en el filtro.</td></tr>';
 }
 
 function render() {
+  const hasData = state.dataset.salesFacts.length || state.dataset.usageFacts.length;
   const hasFiles = state.files.length > 0;
   elements.emptyState.hidden = hasFiles;
   elements.dashboard.hidden = !hasFiles;
-  if (hasFiles) {
-    renderMetrics();
-    renderFiles();
-    renderView();
-  }
+  elements.excelButton.hidden = !hasData;
+  elements.pdfButton.hidden = !hasData;
+  if (!hasFiles) return;
+  initializeFilters();
+  const filters = currentFilters();
+  const summary = buildExecutiveSummary(state.dataset, filters);
+  const usage = buildUsageSummary(state.dataset, filters, state.overrides);
+  state.summary = summary;
+  state.usage = usage;
+  elements.storeTitle.textContent = storeLabel();
+  elements.periodTitle.textContent = summary.dateFrom ? `${summary.dateFrom} a ${summary.dateTo}` : "Sin venta en el filtro";
+  elements.salesMetric.textContent = MONEY.format(summary.sales);
+  elements.ordersMetric.textContent = NUMBER.format(summary.orders);
+  elements.ticketMetric.textContent = MONEY.format(summary.averageTicket);
+  elements.uptMetric.textContent = NUMBER.format(summary.upt);
+  elements.focusList.innerHTML = (summary.focus.length ? summary.focus : ["Sin datos en el filtro."]).map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+  renderFiles();
+  renderPeak(summary);
+  renderProducts(summary);
+  renderChannels(summary);
+  renderUsage(usage);
 }
 
 function reset() {
   state.dataset = createDataset();
   state.files = [];
   state.fingerprints = new Set();
-  state.activeView = "summary";
+  state.initializedFilters = false;
+  state.summary = null;
+  state.usage = null;
   elements.fileInput.value = "";
+  elements.productFilter.value = "";
+  elements.usageFilter.value = "";
   setProgress();
   render();
-  showToast("La lectura local se limpió.");
+}
+
+function clearFilters() {
+  const options = getFilterOptions(state.dataset);
+  elements.storeFilter.value = options.stores.length === 1 ? options.stores[0].id : "";
+  elements.dateFrom.value = options.minDate;
+  elements.dateTo.value = options.maxDate;
+  elements.weekdayFilter.value = "";
+  elements.modeFilter.value = "";
+  elements.productFilter.value = "";
+  elements.compostableFilter.value = "all";
+  elements.usageFilter.value = "";
+  render();
 }
 
 async function handleFiles(fileList) {
@@ -389,7 +414,7 @@ async function handleFiles(fileList) {
   let compatible = 0;
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
-    setProgress(`Archivo ${index + 1} de ${files.length}: ${file.name}`);
+    setProgress(`${index + 1} de ${files.length} · ${file.name}`);
     try {
       state.files.push(await inspectXlsm(file));
       compatible += 1;
@@ -404,28 +429,54 @@ async function handleFiles(fileList) {
   elements.fileInput.value = "";
   setProgress();
   render();
-  showToast(`${compatible} de ${files.length} archivo(s) compatible(s).`);
+  showToast(`${compatible} archivo${compatible === 1 ? "" : "s"} listo${compatible === 1 ? "" : "s"}.`);
+}
+
+function exportContext() { return { storeLabel: storeLabel() }; }
+
+function safeFilename(extension) {
+  const store = (elements.storeFilter.value || "Consolidado").replace(/[^a-zA-Z0-9_-]+/g, "-");
+  return `Resumen_${store}_${state.summary?.dateTo || "actual"}.${extension}`;
+}
+
+function exportExcel() {
+  if (!state.summary) return;
+  downloadBytes(createExecutiveWorkbook(state.summary, state.usage, exportContext()), safeFilename("xlsx"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  showToast("Resumen Excel exportado.");
+}
+
+function exportPdf() {
+  if (!state.summary) return;
+  downloadBytes(createExecutivePdf(state.summary, state.usage, exportContext()), safeFilename("pdf"), "application/pdf");
+  showToast("Resumen PDF exportado.");
 }
 
 elements.uploadButton.addEventListener("click", () => elements.fileInput.click());
 elements.dropZone.addEventListener("click", () => elements.fileInput.click());
-elements.dropZone.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" || event.key === " ") { event.preventDefault(); elements.fileInput.click(); }
-});
+elements.dropZone.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); elements.fileInput.click(); } });
 elements.fileInput.addEventListener("change", () => handleFiles(elements.fileInput.files));
 elements.resetButton.addEventListener("click", reset);
-elements.viewNav.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-view]");
-  if (!button) return;
-  state.activeView = button.dataset.view;
-  renderView();
+elements.clearFilters.addEventListener("click", clearFilters);
+elements.excelButton.addEventListener("click", exportExcel);
+elements.pdfButton.addEventListener("click", exportPdf);
+
+for (const element of [elements.storeFilter, elements.dateFrom, elements.dateTo, elements.weekdayFilter, elements.modeFilter, elements.ordersFilter, elements.compostableFilter]) {
+  element.addEventListener("change", render);
+}
+for (const element of [elements.productFilter, elements.usageFilter]) {
+  element.addEventListener("input", () => { window.clearTimeout(element.renderTimer); element.renderTimer = window.setTimeout(render, 120); });
+}
+elements.usageTable.addEventListener("change", (event) => {
+  const input = event.target.closest(".minimum-input");
+  if (!input) return;
+  const value = Number(String(input.value).replace(",", "."));
+  if (!Number.isFinite(value) || value < 0) { showToast("Escribe un uso mínimo válido."); render(); return; }
+  state.overrides[input.dataset.key] = value;
+  localStorage.setItem(OVERRIDE_KEY, JSON.stringify(state.overrides));
+  render();
 });
-for (const eventName of ["dragenter", "dragover"]) {
-  elements.dropZone.addEventListener(eventName, (event) => { event.preventDefault(); elements.dropZone.classList.add("dragover"); });
-}
-for (const eventName of ["dragleave", "drop"]) {
-  elements.dropZone.addEventListener(eventName, (event) => { event.preventDefault(); elements.dropZone.classList.remove("dragover"); });
-}
+for (const eventName of ["dragenter", "dragover"]) elements.dropZone.addEventListener(eventName, (event) => { event.preventDefault(); elements.dropZone.classList.add("dragover"); });
+for (const eventName of ["dragleave", "drop"]) elements.dropZone.addEventListener(eventName, (event) => { event.preventDefault(); elements.dropZone.classList.remove("dragover"); });
 elements.dropZone.addEventListener("drop", (event) => handleFiles(event.dataTransfer.files));
 
 render();

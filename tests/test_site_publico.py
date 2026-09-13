@@ -54,6 +54,17 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertNotIn("Exportar diagnóstico", combined)
         self.assertNotIn("demoButton", combined)
 
+    def test_exporta_solamente_resumen_excel_y_pdf(self):
+        self.assertIn('id="excelButton"', self.html)
+        self.assertIn('id="pdfButton"', self.html)
+        export = (ROOT / "assets" / "export.mjs").read_text(encoding="utf-8")
+        self.assertIn("createExecutiveWorkbook", export)
+        self.assertIn("createExecutivePdf", export)
+
+    def test_resumen_prioriza_peak_hour_y_kpis(self):
+        for token in ("Venta neta", "Órdenes", "Ticket promedio", "UPT", "Peak Hour", "Enfoque gerente"):
+            self.assertIn(token, self.html)
+
     def test_motor_estructural_esta_versionado(self):
         engine = ROOT / "assets" / "engine.mjs"
         self.assertTrue(engine.is_file())

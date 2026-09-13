@@ -9,13 +9,14 @@ Aplicación: [https://sbx-mex.github.io/ControlOps-360/](https://sbx-mex.github.
 1. Cada tienda actualiza su archivo habitual.
 2. Carga uno o varios `.xlsm`.
 3. El motor valida la estructura de columnas sin depender del nombre del archivo.
-4. Dentro de cada libro compatible, lee únicamente la pestaña terminada en `_ac`.
-5. Consolida las filas usando la llave `IDTienda + Ticket + SecTrans + SecDtl + Id + IDProducto`.
-6. Omite duplicados y muestra resumen, excepciones, productos, horas, modos de orden y una muestra de registros.
+4. Lee venta o uso desde tablas ubicadas en pestañas terminadas en `_ac`.
+5. Enriquece el resultado con catálogos de producto, CeCo, presentación y compostabilidad contenidos en los libros cargados.
+6. Entrega venta, órdenes, ticket, UPT, Peak Hour AM/PM, foco gerencial, producto, canal y uso acumulado de hasta 21 días.
+7. Exporta el filtro visible como resumen Excel o PDF.
 
 Los nombres descargados por el navegador, como `Normalizados (1).xlsm`, no afectan la detección. Una copia idéntica ya cargada se rechaza por contenido; archivos distintos con filas repetidas se consolidan sin duplicarlas.
 
-## Estructura compatible
+## Motores compatibles
 
 La pestaña `_ac` debe contener una Tabla de Excel con estas columnas:
 
@@ -31,6 +32,8 @@ La pestaña `_ac` debe contener una Tabla de Excel con estas columnas:
 - `CantidadAjustada`
 
 También se aprovechan, cuando existen: `PrecioLista`, `NivelPrecio`, `ModoOrden`, `ModoOrdenDesc`, `IDEmpleado` e `IdTerminal`.
+
+El motor Max & Min se detecta en una pestaña `_ac` por `IDTienda`, `Fecha`, `IDArticulo`, `NombreArticulo` y `UsoIdeal`. El mínimo diario es editable y el máximo usa la frecuencia validada: 2 pedidos `×5`, 3 `×4`, 4 `×3`, 5 `×2`.
 
 ## Prueba local de compatibilidad
 
@@ -50,7 +53,7 @@ La prueba solo lee metadatos del contenedor Excel. No abre Excel, no ejecuta mac
 
 ```bash
 python -m unittest discover -s tests -v
-node --test tests/engine.test.mjs
+node --test tests/*.test.mjs
 node --check assets/app.js
 ```
 

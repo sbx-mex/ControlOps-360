@@ -23,16 +23,19 @@ jobs:
       - name: Compilar motor Python
         run: python -m py_compile scripts/compatibilidad_xlsm.py
       - name: Probar motor JavaScript
-        run: node --test tests/engine.test.mjs
+        run: node --test tests/*.test.mjs
       - name: Validar interfaz pública
-        run: node --check assets/app.js
+        run: |
+          node --check assets/app.js
+          node --check assets/engine.mjs
+          node --check assets/export.mjs
       - name: Impedir bases operativas
         run: |
           if git ls-files | grep -Ei '\.(xls|xlsx|xlsm|xlsb|csv|tsv)$'; then
             echo "No se permiten archivos base u operativos en el repositorio."
             exit 1
           fi
-          if grep -nEi 'Exportar diagnóstico|demoButton|archivo_patron' index.html assets/app.js assets/engine.mjs; then
+          if grep -nEi 'Exportar diagnóstico|demoButton|archivo_patron' index.html assets/app.js assets/engine.mjs assets/export.mjs; then
             echo "Se detectó lógica obsoleta."
             exit 1
           fi
