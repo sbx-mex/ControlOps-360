@@ -31,6 +31,10 @@ STRUCTURES = {
     "compostable": ("inven_itm_name", "Compostable"),
     "woe": ("Nombre Micros", "#SAP", "#DIA", "Descripcion WOE", "UMB WOE Cantidad pedido"),
     "horneo": ("Grupo de horneo", "Producto en reporte", "Descongelacion", "Horneo", "Temperatura", "Máximo por charola", "Se puede hornear junto"),
+    "alimentos": ("Item", "Alimento", "#Alimento", "BIS", "Nombre Unificado BIS"),
+    "vasos": ("Descripcion", "Normalizado", "Vaso"),
+    "crema": ("Descripcion", "Aplica Normalizado"),
+    "politica_tienda": ("CeCo", "Compostable"),
 }
 REQUIRED_HEADERS = STRUCTURES["venta"]
 
@@ -46,9 +50,17 @@ def is_ac_source(*values: object) -> bool:
     return any(re.search(r"(?:^|[\s_-])ac$", str(value or "").strip(), re.IGNORECASE) for value in values)
 
 
+def header_key(value: object) -> str:
+    marker = "#" if str(value or "").strip().startswith("#") else ""
+    return marker + normalize(value)
+
+
 def match_structure(headers: Iterable[str], kind: str = "venta") -> tuple[bool, list[str]]:
-    available = {normalize(header) for header in headers}
-    missing = [header for header in STRUCTURES[kind] if normalize(header) not in available]
+    keys = [header_key(header) for header in headers]
+    available = set(keys)
+    missing = [header for header in STRUCTURES[kind] if header_key(header) not in available]
+    if len(keys) != len(available) or "" in available:
+        missing.append("Encabezados únicos y no vacíos")
     return not missing, missing
 
 
@@ -146,15 +158,16 @@ def inspect_workbook(path: Path) -> Result:
                     roles = [
                         kind for kind in kinds
                         if (kind in {"venta", "uso", "auditoria_ticket", "auditoria_void", "auditoria_pago"} and is_ac_source(sheet_name))
-                        or kind in {"productos", "tienda", "presentaciones", "compostable", "woe", "horneo"}
+                        or kind in {"productos", "tienda", "presentaciones", "compostable", "woe", "horneo", "alimentos", "vasos", "crema", "politica_tienda"}
                     ]
                     source = Source(sheet_name, table_name, reference, table_row_count(reference), columns, roles)
                     candidates.append((source, match_structure(columns)[1]))
 
             selected = [source for source, _ in candidates if source.roles]
-            allowed = {"woe", "horneo", "compostable"} if suffix == ".xlsx" else set(STRUCTURES)
+            parameter_roles = {"woe", "horneo", "compostable", "alimentos", "vasos", "crema", "politica_tienda"}
+            allowed = parameter_roles if suffix == ".xlsx" else set(STRUCTURES)
             selected = [source for source in selected if any(role in allowed for role in source.roles)]
-            useful = any(role in ({"woe", "horneo", "compostable"} if suffix == ".xlsx" else {"venta", "uso", "auditoria_ticket", "auditoria_void", "auditoria_pago"}) for source in selected for role in source.roles)
+            useful = any(role in (parameter_roles if suffix == ".xlsx" else {"venta", "uso", "auditoria_ticket", "auditoria_void", "auditoria_pago"}) for source in selected for role in source.roles)
             if selected and useful:
                 kinds = sorted({role for source in selected for role in source.roles})
                 return Result(path.name, True, macro_enabled, selected, kinds)

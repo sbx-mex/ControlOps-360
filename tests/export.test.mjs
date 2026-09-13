@@ -1,44 +1,14 @@
-import assert from "node:assert/strict";
-import { writeFile } from "node:fs/promises";
-import test from "node:test";
-import { createExecutivePdf, createExecutiveWorkbook } from "../assets/export.mjs";
-
-const summary = {
-  sales: 12345.67,
-  orders: 100,
-  averageTicket: 123.45,
-  units: 180,
-  upt: 1.8,
-  am: { label: "07:00–09:00", average: 28 },
-  pm: { label: "18:00–20:00", average: 31 },
-  peakByWeekday: ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((day) => ({ day, am: { label: "07:00–09:00", average: 28 }, pm: { label: "18:00–20:00", average: 31 } })),
-  topProducts: [{ id: "10", name: "Latte", family: "Espresso", units: 40, sales: 3000 }],
-  modes: [{ name: "Mostrador", orders: 100, units: 180, sales: 12345.67, share: 1 }],
-  focus: ["Refuerza 18:00–20:00. Meta: +5."],
-  dateFrom: "2026-08-24",
-  dateTo: "2026-09-13",
-};
-const usage = { days: 21, orders: 4, factor: 3, items: [{ id: "20", store: "38101", name: "Vaso", family: "Vasos", compostable: true, applicable: true, blocked: false, sap: "149443", dia: "013895", totalUse: 42, minimum: 2, maximum: 6, orderUnit: "CAJ", maxOrderUnits: 1 }] };
-const context = {
-  storeLabel: "38101 · Prueba",
-  cups: { quantity: 40, targetName: "Vaso Compostable Caliente 12 oz" },
-  audit: { hasData: true, negativeCount: 2, negativeTotal: -100, voidCount: 3, voidTotal: 140, paymentCount: 10, paymentTotal: 1000, topReason: { name: "Error", amount: 140 }, topPayment: { name: "Efectivo", amount: 800 } },
-  baking: { items: [{ group: "Pan", product: "Croissant", thaw: "4 h", bake: "15 min", temperature: "180 C", maxTray: 6, together: "Sí" }] },
-  orderDraft: { "38101|20": 1 },
-};
-
-test("genera un XLSX OpenXML válido para Excel", async () => {
-  const bytes = createExecutiveWorkbook(summary, usage, context);
-  assert.equal(new DataView(bytes.buffer).getUint32(0, true), 0x04034b50);
-  assert.ok(bytes.length > 2000);
-  assert.match(new TextDecoder().decode(bytes), /Auditoría/);
-  assert.match(new TextDecoder().decode(bytes), /Horneo/);
-  if (process.env.CONTROLOPS_EXPORT_FIXTURES) await writeFile(process.env.CONTROLOPS_EXPORT_FIXTURES + "/resumen.xlsx", bytes);
-});
-
-test("genera un PDF ejecutivo de una página", async () => {
-  const bytes = createExecutivePdf(summary, usage, context);
-  assert.equal(new TextDecoder().decode(bytes.slice(0, 8)), "%PDF-1.4");
-  assert.match(new TextDecoder().decode(bytes), /\/MediaBox \[0 0 792 612\]/);
-  if (process.env.CONTROLOPS_EXPORT_FIXTURES) await writeFile(process.env.CONTROLOPS_EXPORT_FIXTURES + "/resumen.pdf", bytes);
-});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createExecutiveWorkbook,createExecutivePdf} from '../assets/export.mjs';
+import {ZipWorkbook} from '../assets/reader.mjs';
+const report={title:'Peak Hour',store:'38368 · Tienda de prueba',period:'24/08 - 12/09',filters:'Lun',summary:[['Órdenes',12]],sheets:[{name:'Medias horas',headers:['Franja','Órdenes'],rows:Array.from({length:48},(_,i)=>[String(i),i])}]};
+test('XLSX contains only the selected menu with numeric cells and filters',async()=>{const bytes=createExecutiveWorkbook(report),zip=new ZipWorkbook(bytes.buffer);const wb=await zip.text('xl/workbook.xml'),sheet=await zip.text('xl/worksheets/sheet2.xml');assert.match(wb,/Medias horas/);assert.doesNotMatch(wb,/Pedido|Auditoría/);assert.match(sheet,/<v>47<\/v>/);assert.match(sheet,/autoFilter/);});
+test('formula-looking source text remains literal',async()=>{const bytes=createExecutiveWorkbook({...report,sheets:[{name:'Resumen fuente',headers:['Texto'],rows:[['=HYPERLINK("https://bad.invalid")']]}]}),zip=new ZipWorkbook(bytes.buffer);const s=await zip.text('xl/worksheets/sheet2.xml');assert.doesNotMatch(s,/<f>/);assert.match(s,/t="inlineStr"/);});
+test('invalid XML controls in labels cannot corrupt the exported workbook',async()=>{const bytes=createExecutiveWorkbook({...report,sheets:[{name:'Texto',headers:['Texto'],rows:[['Producto\u0000seguro']]}]}),zip=new ZipWorkbook(bytes.buffer);const s=await zip.text('xl/worksheets/sheet2.xml');assert.doesNotMatch(s,/\u0000/);assert.match(s,/Productoseguro/);});
+test('CRC corruption is rejected rather than marked successful',async()=>{const bytes=createExecutiveWorkbook(report);const bad=bytes.slice();bad[bad.indexOf(60)]=61;const z=new ZipWorkbook(bad.buffer);await assert.rejects(()=>z.text('[Content_Types].xml'),/CRC/);});
+test('invalid ZIP and oversized declared contents are blocked',()=>{assert.throws(()=>new ZipWorkbook(new ArrayBuffer(40)),/ZIP/);const b=createExecutiveWorkbook(report);const view=new DataView(b.buffer);for(let i=0;i<b.length-4;i++){if(view.getUint32(i,true)===0x02014b50){view.setUint32(i+24,250*1024*1024,true);break;}}assert.throws(()=>new ZipWorkbook(b.buffer),/límite/);});
+test('PDF paginates all rows without importing other menu data',()=>{const bytes=createExecutivePdf(report),text=new TextDecoder().decode(bytes);assert.match(text,/^%PDF-1.4/);assert.match(text,/\/Count [2-9]/);assert.match(text,/\(47\)/);assert.doesNotMatch(text,/Pedido|Auditoría/);assert.match(text,/%%EOF/);});
+test('PDF xref offsets point to each object',()=>{const bytes=createExecutivePdf(report),text=new TextDecoder().decode(bytes),xref=Number(text.match(/startxref\n(\d+)/)[1]);assert.equal(text.slice(xref,xref+4),'xref');const offsets=text.slice(xref).split('\n').filter(x=>/^\d{10} 00000 n/.test(x)).map(x=>Number(x.slice(0,10)));offsets.forEach((offset,i)=>assert.equal(text.slice(offset,offset+String(i+1).length+6),String(i+1)+' 0 obj'));});
+test('long labels wrap into PDF rather than disappear',()=>{const r={...report,sheets:[{name:'Productos',headers:['Nombre','Cantidad'],rows:[['Producto largo con información operativa '.repeat(6)+'FINAL_VISIBLE',2]]}]};assert.match(new TextDecoder().decode(createExecutivePdf(r)),/FINAL_VISIBLE/);});
+test('empty menus are not exported as fabricated reports',()=>{assert.throws(()=>createExecutiveWorkbook({}),/exportables/);assert.throws(()=>createExecutivePdf({}),/exportables/);});

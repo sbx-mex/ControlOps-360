@@ -1,0 +1,118 @@
+{
+  "project": "sbx-mex/ControlOps-360",
+  "version": "5.0.0",
+  "baseline": "75c12a32fe407b138d11991c22079094e9f8b09d",
+  "date": "2026-09-13",
+  "apply_to": "repository root",
+  "delete": [],
+  "validation": {
+    "node_tests_passed": 50,
+    "python_tests_passed": 18,
+    "local_motor_combinations_passed": 7,
+    "real_inputs_crc_checked": 8,
+    "browser": "pending: local access blocked by environment",
+    "remote_github_actions": "not executed for this package"
+  },
+  "files": [
+    {
+      "path": ".github/workflows/validar-motores.yml",
+      "bytes": 1607,
+      "sha256": "8220c6bf9e152fe645bdbd3f1d370eaf3bf59c6c8544198481163c6b0f2d3803"
+    },
+    {
+      "path": "ACTUALIZACION_V5.md",
+      "bytes": 2886,
+      "sha256": "8f95cb8bd9b1533d20aa40033f35bf138710eaaaf491ec5eccea9eb9deec3678"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1323,
+      "sha256": "7cc17a4dd53bc6414026583f70da2e78c60187a8bc8df8530833a2be74a609ed"
+    },
+    {
+      "path": "SECURITY.md",
+      "bytes": 1998,
+      "sha256": "79813fbbdf023eff61dcea34ab86c46e49191d699ae84ddd9a25b1f5518c46ab"
+    },
+    {
+      "path": "VERSION",
+      "bytes": 6,
+      "sha256": "1cc3d76ac7c21a664e79848fd481e9791016451b244e7de5feeeb9bea5fd2184"
+    },
+    {
+      "path": "index.html",
+      "bytes": 2994,
+      "sha256": "b4468f5842cc39f56737d3c42fa0cf26c2a8481f0923dee35c059c6057f70e19"
+    },
+    {
+      "path": "assets/app.js",
+      "bytes": 95,
+      "sha256": "63acb572f9591945df325ed285355eedf6bcb870f083cf7c8e01c8dd90dc6ce7"
+    },
+    {
+      "path": "assets/engine.mjs",
+      "bytes": 14395,
+      "sha256": "32016ca33b854548a17422b60ea71a15bfb4def55ecb2026091a9397586551f0"
+    },
+    {
+      "path": "assets/export.mjs",
+      "bytes": 13546,
+      "sha256": "d1266a05f4cad8a86b26bb2a5acaa7fd5a601c07eb89369637a0be0323f7a0b2"
+    },
+    {
+      "path": "assets/operations.mjs",
+      "bytes": 25503,
+      "sha256": "23eda3e1cfc9f48460b3572c10169d3ad867f2b692ec60cfd7063703cc2d0e2d"
+    },
+    {
+      "path": "assets/parameters.mjs",
+      "bytes": 139597,
+      "sha256": "d02d9fc24faa6f09cbb05641ae6ffec1859a03a7b6b3749428eb33a2ea3aa3e8"
+    },
+    {
+      "path": "assets/reader.mjs",
+      "bytes": 12515,
+      "sha256": "f4b9c8013d97ae302e52cdc0461cd9e2aa3164b70de6b1d860bab7a718d71ce5"
+    },
+    {
+      "path": "assets/styles.css",
+      "bytes": 15907,
+      "sha256": "7fbc8762a6bfa0a6e3d73f320a313dfc0dabbdf3b95c5e37c7a190675532f2b2"
+    },
+    {
+      "path": "assets/ui.mjs",
+      "bytes": 29220,
+      "sha256": "bc0ed781210b0b4f73deab12d69ed048f0f5408263085f08307355eaba8097fd"
+    },
+    {
+      "path": "scripts/compatibilidad_xlsm.py",
+      "bytes": 10076,
+      "sha256": "6a2e9bedb61341c5bd621817fa9c9d5672a81c53855528019b1ebfc3c3d79c50"
+    },
+    {
+      "path": "tests/engine.test.mjs",
+      "bytes": 16676,
+      "sha256": "8f1793e5a1063ef3b9a3644e4cc63924e8137d978240b7f3bc048995bb3d9cd0"
+    },
+    {
+      "path": "tests/export.test.mjs",
+      "bytes": 3457,
+      "sha256": "f0ff89384e48a0bb0170737b46ac53d68fc6257cad172d0bd0a73de16d2aa899"
+    },
+    {
+      "path": "tests/real_compatibility.mjs",
+      "bytes": 4103,
+      "sha256": "4eb3f097a16a3338fd7028ff2ac537578dc8fc097e38af984c804862d47d37db"
+    },
+    {
+      "path": "tests/test_compatibilidad_xlsm.py",
+      "bytes": 5990,
+      "sha256": "74da9e03cad2ba4c724f4ba56b3c1a754519a18feac481812f3ab466cc9f6f3c"
+    },
+    {
+      "path": "tests/test_site_publico.py",
+      "bytes": 3551,
+      "sha256": "4dfc62b6c5696ba08f83cbb513f03427f465f8322bba53be82f634164bf6a17c"
+    }
+  ]
+}

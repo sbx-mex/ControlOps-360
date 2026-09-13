@@ -1,6 +1,6 @@
 # Seguridad y manejo de datos
 
-Este repositorio público conserva únicamente motores, pruebas y documentación técnica. La aplicación procesa los archivos localmente.
+Este repositorio público conserva motores, parámetros de cruce, pruebas y documentación técnica. La aplicación procesa los archivos localmente.
 
 ## No publicar
 
@@ -12,7 +12,13 @@ Este repositorio público conserva únicamente motores, pruebas y documentación
 
 El `.gitignore` y el workflow bloquean todos los formatos Excel y CSV sin excepciones.
 
-La aplicación valida la estructura y lee únicamente la fuente `_ac`. La política CSP bloquea conexiones salientes; no se utiliza `fetch`, `XMLHttpRequest`, analítica ni servicios de terceros.
+La aplicación valida la estructura: hechos exclusivamente en `_ac`, catálogos de apoyo y parámetros `tbl` con claves únicas. Las cinco tbl suministradas y las referencias públicas WOE/CeCo se conservan como datos de referencia versionados en `assets/parameters.mjs`, nunca como resultados de venta o inventario.
+
+Los libros nuevos se validan antes de incorporarlos. Otro CeCo, claves contradictorias, parámetros inválidos, ZIP dañado o descompresión excesiva bloquean ese archivo. Una política compostable desconocida o contradictoria impide pedir los artículos controlados.
+
+La política CSP bloquea conexiones salientes; no se utiliza `fetch`, `XMLHttpRequest`, analítica ni servicios de terceros. No se ejecutan macros ni conexiones de Excel. Los enlaces a otros proyectos abren una página separada y no reciben los archivos.
+
+Los datos operativos viven en memoria durante la sesión. Los mínimos y las capturas manuales se conservan en el almacenamiento del navegador por CeCo; no utilizar un equipo compartido sin control de acceso. Las exportaciones pueden contener información operativa: compartirlas sólo por canales autorizados.
 
 ## Reporte responsable
 

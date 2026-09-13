@@ -1,81 +1,39 @@
 <!doctype html>
-<html lang="es-MX">
+<html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#006241">
-  <meta name="description" content="Control ejecutivo local para tienda.">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
-  <link rel="stylesheet" href="assets/styles.css">
-  <title>ControlOps 360</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+<meta name="theme-color" content="#004c36">
+<title>Control Ops 360°</title>
+<link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
-  <a class="skip-link" href="#workspace">Ir al resumen</a>
-  <header class="topbar">
-    <div class="brand"><span class="brand-mark" aria-hidden="true">C</span><div><strong>ControlOps 360</strong><span>Control ejecutivo</span></div></div>
-    <div class="top-actions">
-      <button class="button button-export" id="excelButton" type="button" hidden>Excel</button>
-      <button class="button button-export" id="pdfButton" type="button" hidden>PDF</button>
-      <button class="button button-ghost" id="resetButton" type="button">Limpiar</button>
-      <button class="button button-primary" id="uploadButton" type="button">Cargar archivos</button>
-      <input id="fileInput" type="file" accept=".xlsm,.xlsx,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden>
-    </div>
-  </header>
-  <main id="workspace" class="page-shell">
-    <p class="progress" id="progressText" role="status" aria-live="polite" hidden></p>
-    <section id="emptyState" class="empty-state">
-      <span class="eyebrow">Todo en un solo lugar</span><h1>Carga y decide</h1><p>XLSM operativos · XLSX de parámetros</p>
-      <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="Seleccionar archivos Excel"><strong>Seleccionar archivos</strong><span>uno o varios; el nombre no importa</span></div>
-    </section>
-    <section id="dashboard" hidden>
-      <section class="filter-panel" id="filterPanel" aria-label="Filtros" hidden>
-        <label>CeCo<select id="storeFilter"><option value="">Todas</option></select></label>
-        <label>Desde<input id="dateFrom" type="date"></label><label>Hasta<input id="dateTo" type="date"></label>
-        <label class="sales-only">Día<select id="weekdayFilter"><option value="">Todos</option><option value="0">Lunes</option><option value="1">Martes</option><option value="2">Miércoles</option><option value="3">Jueves</option><option value="4">Viernes</option><option value="5">Sábado</option><option value="6">Domingo</option></select></label>
-        <label class="sales-only">Canal<select id="modeFilter"><option value="">Todos</option></select></label>
-        <label class="search-filter sales-only">Producto<input id="productFilter" type="search" placeholder="ID o nombre"></label>
-        <button class="filter-reset" id="clearFilters" type="button">Restablecer</button>
-      </section>
-      <div class="report-heading">
-        <div><span class="eyebrow">CeCo validado</span><h1 id="storeTitle">Tienda</h1><p id="periodTitle">—</p></div>
-        <details class="source-summary"><summary id="sourceSummary">Archivos</summary><ul id="fileList"></ul></details>
-      </div>
-      <nav class="module-nav module-back" id="moduleNav" aria-label="Navegación" hidden><button type="button" data-module="menu">← Menú</button><strong id="activeModuleTitle">Análisis</strong></nav>
-      <section class="module-menu" id="menuModule" data-view="menu">
-        <button type="button" data-open-module="sales"><span class="module-icon">PH</span><strong>Peak Hour</strong><small>Demanda, venta y foco gerente</small></button>
-        <button type="button" data-open-module="audit"><span class="module-icon">AU</span><strong>Auditoría</strong><small>Negativos, voids y pagos</small></button>
-        <button type="button" data-open-module="order"><span class="module-icon">MX</span><strong>Pedido</strong><small>Max & Min con validación WOE</small></button>
-        <button type="button" data-open-module="baking"><span class="module-icon">HO</span><strong>Horneo</strong><small>Parámetros por producto</small></button>
-        <button type="button" data-open-module="about"><span class="module-icon">i</span><strong>Acerca de</strong><small>Alcance de la plataforma</small></button>
-      </section>
-      <section id="salesModule" data-view="sales" hidden>
-        <section class="summary-grid" aria-label="Indicadores principales">
-          <article class="metric-card"><span>Venta neta</span><strong id="salesMetric">$0</strong></article><article class="metric-card"><span>Órdenes</span><strong id="ordersMetric">0</strong></article><article class="metric-card"><span>Ticket promedio</span><strong id="ticketMetric">$0</strong></article><article class="metric-card"><span>UPT</span><strong id="uptMetric">0.0</strong></article>
-        </section>
-        <section class="impact-grid">
-          <article class="panel peak-card"><div class="panel-title"><div><span class="eyebrow">Peak Hour</span><h2>Ventanas de mayor demanda</h2></div><span class="goal-chip">Meta +5</span></div><div class="peak-pairs"><div><span>AM</span><strong id="peakAmTime">—</strong><small id="peakAmOrders">0 órdenes/día</small></div><div><span>PM</span><strong id="peakPmTime">—</strong><small id="peakPmOrders">0 órdenes/día</small></div></div></article>
-          <article class="panel focus-card"><span class="eyebrow">Enfoque gerente</span><h2>Qué mover hoy</h2><ol id="focusList"><li>Sin datos.</li></ol></article>
-        </section>
-        <section class="panel cup-panel" id="cupPanel" hidden><div><span class="eyebrow">Normalizados · 1:1</span><h2>Bebida Alta Caliente</h2></div><strong id="cupQuantity">0 bebidas</strong><span aria-hidden="true">→</span><div><strong id="cupTarget">Vaso 12 oz</strong><small id="cupStatus">—</small></div></section>
-        <section class="analysis-grid">
-          <article class="panel table-panel"><div class="panel-title"><div><span class="eyebrow">Peak por día</span><h2>4 medias horas consecutivas</h2></div></div><div class="table-scroll"><table><thead><tr><th>Día</th><th>Peak AM</th><th>Órd./día</th><th>Peak PM</th><th>Órd./día</th></tr></thead><tbody id="peakTable"></tbody></table></div></article>
-          <article class="panel table-panel"><div class="panel-title"><div><span class="eyebrow">Venta</span><h2>Productos de impacto</h2></div><small id="productCount">0 productos</small></div><div class="table-scroll"><table><thead><tr><th>Producto</th><th>Unidades</th><th>Venta</th></tr></thead><tbody id="productTable"></tbody></table></div></article>
-        </section>
-        <section class="panel channel-panel"><div class="panel-title"><div><span class="eyebrow">Canales</span><h2>Participación de venta</h2></div></div><div id="channelBars" class="channel-bars"></div></section>
-      </section>
-      <section id="auditModule" data-view="audit" hidden>
-        <section class="summary-grid"><article class="metric-card"><span>Tickets negativos</span><strong id="auditNegative">0</strong><small id="auditNegativeAmount">$0</small></article><article class="metric-card"><span>Tickets con void</span><strong id="auditVoids">0</strong><small id="auditVoidAmount">$0</small></article><article class="metric-card"><span>Pagos leídos</span><strong id="auditPayments">0</strong><small id="auditPaymentAmount">$0</small></article><article class="metric-card"><span>Riesgo principal</span><strong class="metric-text" id="auditReason">—</strong><small id="auditPaymentMode">—</small></article></section>
-      </section>
-      <section class="panel inventory-panel" id="inventoryPanel" data-view="order" hidden>
-        <div class="inventory-heading"><div><span class="eyebrow">Pedido · Max & Min</span><h2>Solo artículos aplicables</h2><p id="usagePeriod">—</p></div><div class="inventory-filters"><label>Tipo de tienda<select id="storeType"><option value="">Definir</option><option value="no">No compostable</option><option value="yes">Compostable</option></select></label><label># pedidos<select id="ordersFilter"><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label><label>Tipo<select id="compostableFilter"><option value="all">Todos</option><option value="yes">Compostable</option><option value="no">No compostable</option></select></label><label>Artículo<input id="usageFilter" type="search" placeholder="Buscar"></label></div></div>
-        <div class="order-strip"><strong id="storeTypeStatus">Define tipo de tienda</strong><span><b id="orderCount">0</b> artículos · <b id="orderTotal">0</b> unidades de pedido</span></div>
-        <div class="table-scroll inventory-scroll"><table><thead><tr><th>Artículo</th><th>Aplica</th><th id="usageTotalHeader">Uso</th><th>Mínimo diario</th><th>Máximo</th><th>Empaque</th><th>Pedido</th></tr></thead><tbody id="usageTable"></tbody></table></div>
-      </section>
-      <section class="panel baking-panel" id="bakingModule" data-view="baking" hidden><div class="inventory-heading"><div><span class="eyebrow">Parámetro</span><h2>Horneo</h2></div><label>Producto<input id="bakingFilter" type="search" placeholder="Buscar"></label></div><div class="table-scroll"><table><thead><tr><th>Producto</th><th>Descongelación</th><th>Horneo</th><th>Temperatura</th><th>Máx./charola</th><th>Compatible</th></tr></thead><tbody id="bakingTable"></tbody></table></div><p class="table-count" id="bakingCount">0 productos</p></section>
-      <section class="panel about-panel" id="aboutModule" data-view="about" hidden><span class="eyebrow">Acerca de</span><h2>ControlOps 360</h2><p>Lee por estructura, valida un solo CeCo y activa únicamente lo disponible. Normalizados mejora Peak Hour; Auditoría concentra riesgos; Max & Min limita Pedido; WOE valida artículos; Horneo aplica parámetros.</p></section>
-    </section>
-  </main>
-  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-  <script src="assets/app.js" type="module"></script>
+<a class="skip-link" href="#content">Ir al contenido</a>
+<header class="topbar">
+ <button class="brand" id="homeButton" aria-label="Menú principal"><span class="brandmark">C<span>360</span></span><span>Control Ops <b>360°</b></span></button>
+ <div id="storeBadge" class="store-badge" hidden></div>
+ <div class="top-actions"><button id="resetButton" class="quiet" hidden>Cambiar tienda</button><button id="uploadButton" class="primary">＋ Cargar Excel</button></div>
+ <input id="fileInput" type="file" accept=".xlsm,.xlsx,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden>
+</header>
+<div id="loading" class="loading" role="status" aria-live="polite" hidden><div class="loading-card"><div class="spinner"></div><h2>Preparando tu tienda</h2><p id="progressText">Validando archivos…</p></div></div>
+<main id="content" tabindex="-1">
+ <section id="emptyState" class="welcome">
+  <span class="eyebrow">MULTIHERRAMIENTA OPERATIVA</span><h1>Abre los motores<br>de tu tienda.</h1>
+  <button id="dropZone" class="drop-zone"><span class="file-icon">▦</span><strong>Cargar uno o varios Excel</strong><span>XLSM de tienda · XLSX de parámetros</span></button>
+  <div class="welcome-tools"><span>Max & Min</span><span>Peak Hour</span><span>Pedido WOE</span><span>Auditoría</span></div>
+  <button class="text-button" data-module="about">Acerca de</button>
+ </section>
+ <section id="workspace" class="workspace" hidden>
+  <aside class="sidebar"><span class="sidebar-label">TU OPERACIÓN</span><nav id="moduleNav" aria-label="Herramientas"></nav><div class="sidebar-bottom"><button data-module="about">Acerca de</button><small>V5.0 · Datos locales</small></div></aside>
+  <div class="workarea">
+   <div class="page-heading"><div><p class="eyebrow" id="periodTitle"></p><h1 id="moduleTitle"></h1></div><div class="export-actions" id="exportActions" hidden><button id="excelButton">Excel ↓</button><button id="pdfButton">PDF ↓</button></div></div>
+   <div id="moduleContent"></div>
+  </div>
+ </section>
+</main>
+<dialog id="confirmation" aria-labelledby="confirmationTitle"><div class="confirm-icon">✓</div><h2 id="confirmationTitle">Tienda lista</h2><div id="confirmationContent"></div><button id="confirmButton" class="primary">Continuar</button></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script type="module" src="assets/app.js"></script>
 </body>
 </html>

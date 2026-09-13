@@ -52,6 +52,12 @@ def make_xlsm(path: Path, tables: list[tuple[str, str, list[str]]], macros: bool
 
 
 class CompatibilityTests(unittest.TestCase):
+    def test_food_flag_and_piece_count_are_distinct_columns(self):
+        headers = list(MOD.STRUCTURES["alimentos"])
+        self.assertTrue(MOD.match_structure(headers, "alimentos")[0])
+        self.assertFalse(MOD.match_structure([h for h in headers if h != "#Alimento"], "alimentos")[0])
+        self.assertFalse(MOD.match_structure(headers + ["Ítem"], "alimentos")[0])
+
     def test_filename_is_irrelevant_and_ac_is_selected(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "descarga (2).xlsm"

@@ -1,25 +1,21 @@
-# ControlOps 360
+# Control Ops 360°
 
-Control ejecutivo local para tienda. Carga uno o varios libros; el motor reconoce tablas por columnas, no por nombre del archivo, y despliega un menú solo con los análisis disponibles.
+Multiherramienta local de tienda. Uno o varios XLSM activan sólo sus módulos. CeCo fijo, cruces tbl, tarjetas Max & Min, tendencia, Pedido WOE, 48 medias horas, normalizados, horneo, ranking y auditoría. Excel y PDF pertenecen al menú activo.
 
-## Módulos
+## Actualización V5
 
-- `Normalizados.xlsm`: venta, ticket, UPT, Peak Hour y vaso de Bebida Alta Caliente.
-- `Auditoria_Tienda.xlsm`: negativos, voids y pagos.
-- `Max & Min.xlsm`: uso acumulado hasta 21 días y Pedido editable.
-- `WOE_CMS_Motor.xlsx`: códigos, empaque y aplicabilidad Compostable/No compostable.
-- `tbl_parametro_horneo.xlsx`: descongelación, horneo, temperatura y máximo por charola.
+Reemplaza los archivos conservando las carpetas del ZIP. No incluye XLSM, ventas ni inventarios de tienda. Las cinco tbl se integran como parámetros versionados en `assets/parameters.mjs`; pueden actualizarse cargando sus XLSX originales por estructura.
 
-Los XLSM operativos se leen desde pestañas `_ac`. Los XLSX solo se aceptan cuando su estructura corresponde a un parámetro conocido. Al combinar motores, todos deben pertenecer al mismo CeCo. Pedido bloquea artículos incompatibles o sin equivalencia WOE.
+La lógica y las limitaciones están en **Acerca de**. Tapas automáticas, historial entre sesiones, venta por empleado y descuentos completos quedan para la siguiente versión. Code Brew y Lay Out siguen siendo proyectos externos.
 
-## Validación
+## Pruebas
 
 ```bash
-python scripts/compatibilidad_xlsm.py archivo.xlsm parametro.xlsx
 python -m unittest discover -s tests -v
 node --test tests/*.test.mjs
+python scripts/compatibilidad_xlsm.py motor.xlsm parametro.xlsx
 ```
 
-Aplicación: [https://sbx-mex.github.io/ControlOps-360/](https://sbx-mex.github.io/ControlOps-360/)
+Para revisión local: `python -m http.server 8000`, después abrir `http://localhost:8000` con Chrome o Edge actualizado. En GitHub Pages, publicar desde la raíz del repositorio.
 
-Versión actual: `4.0.0`.
+No se ejecutan macros ni conexiones. Actualiza y guarda el Excel antes de cargarlo. Los datos operativos sólo permanecen en memoria durante la sesión. No hay envíos de archivos ni dependencias de CDN.

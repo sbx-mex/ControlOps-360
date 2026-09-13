@@ -1,114 +1,53 @@
-import assert from "node:assert/strict";
-import test from "node:test";
-import {
-  addAuditRows, addReferenceRows, addRows, addUsageRows, buildAuditSummary, buildCupSummary, buildExecutiveSummary, buildUsageSummary,
-  classifyStructure, createDataset, isAcSource, matchStructure, mergeDataset,
-} from "../assets/engine.mjs";
-
-const headers = [
-  "IDTienda", "FechaHora", "Ticket", "SecTrans", "SecDtl", "Id", "IDProducto",
-  "Cantidad", "PrecioLista", "Total", "NivelPrecio", "ModoOrden", "ModoOrdenDesc",
-  "IDEmpleado", "IdTerminal", "CantidadAjustada",
-];
-
-function salesRow({ date = 45550.5, ticket = 100, detail = 1, id = 9, product = 1234, quantity = 2, total = 100, mode = "Mostrador" } = {}) {
-  return [38101, date, ticket, 1, detail, id, product, quantity, 50, total, 1, 3, mode, 77, 2, quantity];
-}
-
-test("reconoce venta y uso por columnas, no por archivo", () => {
-  assert.equal(matchStructure(headers).compatible, true);
-  assert.equal(matchStructure(headers.filter((header) => header !== "IDProducto")).compatible, false);
-  assert.deepEqual(classifyStructure(["IDTienda", "Fecha", "IDArticulo", "NombreArticulo", "UsoIdeal"]), ["usage"]);
-});
-
-test("selecciona solamente nombres de fuente terminados en _ac", () => {
-  assert.equal(isAcSource("detalleventa_ac"), true);
-  assert.equal(isAcSource("USO-AC"), true);
-  assert.equal(isAcSource("detalleventa_base"), false);
-});
-
-test("consolida archivos renombrados y omite la misma llave", () => {
-  const dataset = createDataset();
-  const first = createDataset();
-  const second = createDataset();
-  addRows(first, headers, [salesRow()], { fileName: "Normalizados.xlsm", sourceName: "detalleventa_ac" });
-  addRows(second, headers, [salesRow()], { fileName: "Normalizados (1).xlsm", sourceName: "detalleventa_ac" });
-  assert.equal(mergeDataset(dataset, first).uniqueRows, 1);
-  assert.equal(mergeDataset(dataset, second).duplicateRows, 1);
-  assert.equal(dataset.salesFacts.length, 1);
-  assert.equal(dataset.transactionCount, 1);
-});
-
-test("calcula KPI y Peak Hour con cuatro medias horas consecutivas", () => {
-  const dataset = createDataset();
-  const rows = [];
-  [45550.25, 45550.2708333333, 45550.2916666667, 45550.3125].forEach((date, index) => {
-    rows.push(salesRow({ date, ticket: 100 + index, detail: 1, id: 20 + index, total: 50 }));
-  });
-  addRows(dataset, headers, rows);
-  const result = buildExecutiveSummary(dataset);
-  assert.equal(result.orders, 4);
-  assert.equal(result.sales, 200);
-  assert.equal(result.averageTicket, 50);
-  assert.equal(result.am.label, "06:00–08:00");
-  assert.equal(result.am.average, 4);
-});
-
-test("enriquece producto para un resumen entendible", () => {
-  const dataset = createDataset();
-  addRows(dataset, headers, [salesRow()]);
-  addReferenceRows(dataset, "product", ["IDProducto", "Descripcion", "DescripcionFam"], [[1234, "Latte", "Espresso"]]);
-  assert.equal(buildExecutiveSummary(dataset).topProducts[0].name, "Latte");
-});
-
-test("acumula 21 días y permite mínimo editable", () => {
-  const dataset = createDataset();
-  const usageHeaders = ["IDTienda", "Fecha", "IDArticulo", "NombreArticulo", "NombreClasificador", "Unidad", "UsoIdeal"];
-  const rows = Array.from({ length: 21 }, (_, index) => [38101, 45530 + index, 10, "Vaso compostable", "Vasos", "PZA", 2]);
-  addUsageRows(dataset, usageHeaders, rows);
-  const base = buildUsageSummary(dataset, { store: "38101", orders: 4 });
-  assert.equal(base.days, 21);
-  assert.equal(base.items[0].minimum, 2);
-  assert.equal(base.items[0].maximum, 6);
-  assert.equal(base.items[0].compostable, true);
-  const edited = buildUsageSummary(dataset, { store: "38101", orders: 4 }, { "38101|10": 3 });
-  assert.equal(edited.items[0].maximum, 9);
-});
-
-test("conserva filas sin IDProducto y detecta negativos", () => {
-  const dataset = createDataset();
-  addRows(dataset, headers, [salesRow({ product: "", quantity: -1 })]);
-  const result = buildExecutiveSummary(dataset);
-  assert.equal(dataset.missingProductRows, 1);
-  assert.equal(result.exceptions, 1);
-});
-
-test("resume auditoría por estructura _ac", () => {
-  const dataset = createDataset();
-  addAuditRows(dataset, "auditVoid", ["IDTienda", "FechaHora", "Ticket", "IDProducto", "IdVoid", "VoidReason", "Total"], [[38101, 45550.5, 100, 20, 1, "Error captura", -90]]);
-  const audit = buildAuditSummary(dataset, { store: "38101" });
-  assert.equal(audit.voidCount, 1);
-  assert.equal(audit.voidTotal, 90);
-  assert.equal(audit.topReason.name, "Error captura");
-});
-
-test("WOE bloquea vasos que no aplican al CeCo", () => {
-  const dataset = createDataset();
-  addUsageRows(dataset, ["IDTienda", "Fecha", "IDArticulo", "NombreArticulo", "UsoIdeal"], [[38101, 45550, 10, "Vaso Compostable Caliente 12 oz", 10]]);
-  addReferenceRows(dataset, "woe", ["Nombre Micros", "#SAP", "#DIA", "Descripcion WOE", "UMB WOE Cantidad pedido", "Comentario Para Revision"], [["Vaso Compostable Caliente 12 oz", 149443, "013895", "Vaso", 1000, "Compostable: Si"]]);
-  const usage = buildUsageSummary(dataset, { store: "38101", storeType: false });
-  assert.equal(usage.items[0].applicable, false);
-  assert.equal(usage.items[0].sap, "149443");
-});
-
-test("Normalizados convierte Bebida Alta Caliente a vaso 12 oz", () => {
-  const dataset = createDataset();
-  addRows(dataset, headers, [salesRow({ product: 27 })]);
-  dataset.salesFacts[0].priceLevel = 2;
-  addReferenceRows(dataset, "product", ["IDProducto", "Descripcion"], [[27, "Cappuccino"]]);
-  addReferenceRows(dataset, "woe", ["Nombre Micros", "#SAP", "#DIA", "Descripcion WOE", "UMB WOE Cantidad pedido", "Comentario Para Revision"], [["Vaso de Papel 12 oz", 149227, "000873", "Vaso", 1000, "Compostable: No"]]);
-  const summary = buildExecutiveSummary(dataset, { store: "38101" });
-  const cups = buildCupSummary(dataset, summary, { store: "38101", storeType: false });
-  assert.equal(cups.quantity, 2);
-  assert.equal(cups.ready, true);
-});
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import parameters from '../assets/parameters.mjs';
+import {STRUCTURES,createDataset,addRows,addUsageRows,addAuditRows,addReferenceRows,mergeDataset,validateCeCo,operationalStores,matchStructure,isAcSource,dateParts,dateExtent,shortPeriod} from '../assets/engine.mjs';
+import {inventory,unitSpec,minmaxValues,calculateOrder,coverageDays,peakHour,normalizados,bakingForecast,auditStore,topProducts,reportFor,availableModules} from '../assets/operations.mjs';
+const salesHeaders=[...STRUCTURES.sales,'NivelPrecio','ModoOrdenDesc'];
+const sale=(date='2026-08-24T09:00:00',ticket=1,detail=1,product=10,quantity=1,total=50,store=38368)=>[store,date,ticket,1,detail,detail,product,quantity,total,quantity,2,'Mostrador'];
+const usageHeaders=[...STRUCTURES.usage,'Unidad','NombreClasificador'];
+const use=(date='2026-08-24',item=10,quantity=3,unit='PZA:',name='Prueba',store=38368)=>[store,date,item,name,quantity,unit,'Pastries'];
+function seed(){const d=createDataset();for(const t of parameters.tables)addReferenceRows(d,t.type,t.headers,t.rows,t);return d;}
+function stock(d,name='Prueba',major='PZA:',pack='CJA: Caja 12',unit='PZA:'){addReferenceRows(d,'stock',STRUCTURES.stock,[[51000,name,major,pack,unit]]);}
+function woe(d,name='Prueba',umb=12,relation=12,unit='PZA',comp=''){addReferenceRows(d,'woe',[...STRUCTURES.woe,'Relacion Unidad de Medida Micros con # Total','Unidad WOE','UMP WOE','Comentario Para Revision'],[[name,100,'000123',name,umb,relation,unit,'CAJ',comp]]);}
+test('all five tbl and WOE parameters seed without conflicting keys',()=>{const d=seed();assert.equal(d.foodRules.size,101);assert.equal(d.drinkRules.size,181);assert.equal(d.creamRules.size,5);assert.equal(d.bakingCatalog.size,9);assert.equal(d.storePolicies.get('38368'),false);});
+test('detection is structural and facts require _ac',()=>{assert.equal(matchStructure(STRUCTURES.sales).compatible,true);assert.equal(matchStructure(['Ticket']).compatible,false);assert.equal(isAcSource('detalleventa_ac'),true);assert.equal(isAcSource('detalleventa_base'),false);assert.equal(isAcSource('Mi hoja-AC'),true);});
+test('invalid dates and numeric values are not converted to zero',()=>{assert.equal(dateParts('31/02/2026'),null);assert.equal(dateParts('2026-08-24T25:00:00'),null);const d=createDataset();addUsageRows(d,usageHeaders,[use('2026-08-24',10,'#VALUE!')]);assert.equal(d.invalidRows,1);assert.throws(()=>mergeDataset(createDataset(),d),/filas/);});
+test('short date range and full-day extent do not overflow argument stack',()=>{assert.equal(shortPeriod('2026-08-24','2026-09-12'),'24/08 - 12/09');assert.equal(dateExtent(Array.from({length:200000},()=>({dayMs:Date.UTC(2026,8,12)}))).to,'2026-09-12');});
+test('refresh replaces included dates and accumulates older dates',()=>{const d=createDataset(),a=createDataset(),b=createDataset();addUsageRows(a,usageHeaders,[use('2026-08-24',10,3),use('2026-08-25',10,5)]);addUsageRows(b,usageHeaders,[use('2026-08-25',10,8)]);mergeDataset(d,a);mergeDataset(d,b);mergeDataset(d,b);assert.equal(d.usageFacts.length,2);assert.equal(d.usageFacts.reduce((s,r)=>s+r.use,0),11);});
+test('a foreign CeCo cannot change facts or catalogs',()=>{const d=createDataset(),bad=createDataset();addRows(d,salesHeaders,[sale()]);addRows(bad,salesHeaders,[sale(undefined,1,1,10,1,50,38101)]);addReferenceRows(bad,'store',STRUCTURES.store,[[38101,'Otra']]);const before=JSON.stringify(d.salesFacts);assert.throws(()=>mergeDataset(d,bad),/distinto/);assert.equal(JSON.stringify(d.salesFacts),before);assert.equal(d.storeCatalog.size,0);});
+test('mixed-store workbook and mismatched Tienda are rejected',()=>{const mixed=createDataset();addUsageRows(mixed,usageHeaders,[use(),use('2026-08-25',10,3,'PZA:','Prueba',38101)]);assert.throws(()=>validateCeCo(createDataset(),mixed),/más de un CeCo/);const one=createDataset();addUsageRows(one,usageHeaders,[use()]);addReferenceRows(one,'store',STRUCTURES.store,[[38101,'Otra']]);assert.throws(()=>validateCeCo(createDataset(),one),/no coincide/);});
+test('identical duplicates are ignored, contradictory duplicates rejected',()=>{const d=createDataset();addRows(d,salesHeaders,[sale(),sale()]);assert.equal(d.salesFacts.length,1);assert.equal(d.duplicateRows,1);assert.throws(()=>addRows(d,salesHeaders,[sale(undefined,1,1,10,1,60)]),/valores distintos/);});
+test('parameter file replaces its own table, not unrelated catalogs',()=>{const d=seed(),p=createDataset();addReferenceRows(p,'cream',STRUCTURES.cream,[['Crema nueva','Si']]);mergeDataset(d,p);assert.equal(d.creamRules.size,1);assert.equal(d.drinkRules.size,181);});
+test('ambiguous parameter mappings fail closed',()=>{const d=createDataset();assert.throws(()=>addReferenceRows(d,'compostable',STRUCTURES.compostable,[['Vaso','Si'],['Vaso','No']]),/ambiguo/);});
+test('normalized duplicate headers cannot silently override a column',()=>{assert.throws(()=>addReferenceRows(createDataset(),'cream',['Descripcion','Descripción','Aplica Normalizado'],[['A','B','Si']]),/Encabezado/);});
+test('Alimento flag and #Alimento count retain separate meanings',()=>{const d=createDataset();addReferenceRows(d,'food',STRUCTURES.food,[['No es comida','No',1,'No',''],['Panqué','Si',7,'No','']]);assert.equal(d.foodRules.get('noescomida').food,false);assert.equal(d.foodRules.get('panque').food,true);assert.equal(d.foodRules.get('panque').pieces,7);assert.equal(matchStructure(STRUCTURES.food.filter(x=>x!=='#Alimento'),'food').compatible,false);});
+test('invalid drink and food rules are rejected instead of losing demand silently',()=>{assert.throws(()=>addReferenceRows(createDataset(),'drink',STRUCTURES.drink,[['A','Vaso','Na']]),/vaso inválida/);assert.throws(()=>addReferenceRows(createDataset(),'food',STRUCTURES.food,[['A','Si',0,'No','']]),/alimento/);assert.throws(()=>addReferenceRows(createDataset(),'food',STRUCTURES.food,[['A','Si',1,'Si','']]),/alimento/);});
+test('missing DIA is not fabricated as code 000000',()=>{const d=createDataset();addReferenceRows(d,'woe',STRUCTURES.woe,[['Prueba',123,'','Prueba',12]]);assert.equal(d.woeCatalog.get('prueba').dia,'');});
+test('discrete blister and bag conversions never interpret gram weights as pieces',()=>{assert.equal(unitSpec('BLI: Blis 3pz').multiplier,3);assert.equal(unitSpec('BOL: Bol 35 pzs').multiplier,35);assert.equal(unitSpec('PAQ: Paq 500g').multiplier,1);assert.equal(unitSpec('BOL: Bol 3.9 Lb').multiplier,1);});
+test('Cake Pops: 3 pieces per use, 36 per stock and WOE case',()=>{const d=createDataset();addUsageRows(d,usageHeaders,[use(undefined,10,2,'BLI: Blis 3pz')]);stock(d,'Prueba','BLI: Blis 3pz','CJA: Caja 12');woe(d,'Prueba',36,36);const r=inventory(d,{store:'38368',window:'all'}).items[0];assert.equal(r.totalUse,6);assert.equal(r.p.stockPack,36);assert.equal(r.p.woePack,36);assert.equal(minmaxValues(r,'pack').maximum,1);});
+test('Pan de Queso: 35 pieces per use and 105 per case',()=>{const d=createDataset();addUsageRows(d,usageHeaders,[use(undefined,10,1,'BOL: Bol 35 pzs')]);stock(d,'Prueba','BOL: Bol 35 pzs','CJA: Caja 3');woe(d,'Prueba',105,105);const r=inventory(d,{store:'38368'}).items[0];assert.equal(r.totalUse,35);assert.equal(r.p.stockPack,105);assert.equal(r.p.woePack,105);});
+test('Panqué: 7 slices per loaf, not one slice per WOE piece',()=>{const d=createDataset();addUsageRows(d,usageHeaders,[use(undefined,10,7,'REB: Reb')]);stock(d,'Prueba','REB: Reb','PZA: 7 Rebanada','REB: Reb');woe(d,'Prueba',1,7);const r=inventory(d,{store:'38368'}).items[0];assert.equal(r.p.stockPack,7);assert.equal(r.p.woePack,7);});
+test('500 g use package and 1 kg order convert to 2 packages',()=>{const d=createDataset();addUsageRows(d,usageHeaders,[use(undefined,10,2,'PAQ: Paq 500g')]);stock(d,'Prueba','PAQ: Paq 500g','PAQ: Paq 1 Kg','GR: Gramo');woe(d,'Prueba',1,1,'KG');const r=inventory(d,{store:'38368'}).items[0];assert.equal(r.totalUse,2);assert.equal(r.p.stockPack,2);assert.equal(r.p.woePack,2);});
+test('zero and negative aggregate use are not product cards',()=>{const d=createDataset();addUsageRows(d,usageHeaders,[use(undefined,10,0),use(undefined,11,-1),use(undefined,12,2)]);assert.equal(inventory(d).items.length,1);});
+test('weekdays use all observed dates, including zero product use',()=>{const d=createDataset();addUsageRows(d,usageHeaders,[use('2026-08-24',10,6),use('2026-08-31',11,2)]);const r=inventory(d,{weekday:0,window:'all'});assert.equal(r.days,2);assert.equal(r.items.find(i=>i.id==='10').average,3);});
+test('zero minimum override is respected',()=>{const d=createDataset();addUsageRows(d,usageHeaders,[use()]);const r=inventory(d,{orders:4},{'38368|10':0}).items[0];assert.equal(r.minimum,0);assert.equal(r.maximum,0);assert.equal(r.adjusted,true);});
+test('21-day coverage is bounded, history stays accumulated',()=>{const d=createDataset();addUsageRows(d,usageHeaders,[use('2026-08-01'),use('2026-08-24')]);assert.equal(inventory(d).dates[0],'2026-08-24');assert.equal(d.usageFacts.length,2);});
+test('unknown or incompatible compostable status blocks ordering',()=>{const d=createDataset();addUsageRows(d,usageHeaders,[use(undefined,10,3,'PZA:','Vaso')]);woe(d,'Vaso',1000,1000,'PZA','Compostable: Si');assert.equal(inventory(d,{store:'38368'}).items[0].blocked,true);d.storePolicies.set('38368',false);assert.match(inventory(d,{store:'38368'}).items[0].reason,/No aplica/);d.storePolicies.set('38368',true);assert.equal(inventory(d,{store:'38368'}).items[0].blocked,false);});
+test('WOE requires stock, respects transit dates and validates saved overrides again',()=>{const d=createDataset();addUsageRows(d,usageHeaders,[use(undefined,10,12)]);woe(d);const i=inventory(d,{store:'38368'}).items[0],settings={today:'2026-09-13',delivery:'2026-09-15'};assert.equal(calculateOrder(i,{},settings).blocked,true);const ok=calculateOrder(i,{stock:0},settings);assert.equal(ok.suggested,3);assert.equal(ok.blocked,false);assert.equal(calculateOrder(i,{stock:0,order:4},settings).blocked,true);assert.equal(calculateOrder(i,{stock:0,transit:10,transitDate:'2026-09-16'},settings).blocked,true);assert.equal(calculateOrder({...i,minimum:0},{stock:0,order:3},settings).blocked,true);});
+test('coverage follows next scheduled reception',()=>{assert.equal(coverageDays('2026-09-13','2026-09-15',1),2.5);assert.equal(coverageDays('2026-09-15','2026-09-13'),null);const i={minimum:2,p:{woePack:12},blocked:false};assert.equal(calculateOrder(i,{stock:0},{today:'2026-09-13',delivery:'2026-09-15',receptions:[1,4]}).end,'2026-09-18');});
+test('invalid order dates and malformed captures never show ready',()=>{const i={minimum:2,p:{woePack:12},blocked:false},settings={today:'2026-09-13',delivery:'2026-09-15'};assert.equal(calculateOrder(i,{stock:0},{...settings,delivery:'2026-09-99'}).blocked,true);assert.equal(calculateOrder(i,{stock:0,transit:'error'},settings).blocked,true);assert.equal(calculateOrder(i,{stock:0,order:'error'},settings).blocked,true);assert.equal(calculateOrder(i,{stock:0,transit:0},settings).blocked,false);});
+test('Peak Hour includes all 48 slots with Monday-to-Monday averaging',()=>{const d=createDataset();addRows(d,salesHeaders,[sale('2026-08-24T23:45:00',1),sale('2026-08-31T09:00:00',2),sale('2026-08-25T23:45:00',3)]);const r=peakHour(d);assert.equal(r.slots.length,48);assert.equal(r.slots[47].weekday[0],0.5);assert.equal(r.slots[47].weekday[1],1);assert.equal(r.slots[47].weekday[2],null);assert.equal(r.slots.reduce((s,x)=>s+x.total,0),3);});
+test('no-demand peaks are unavailable, not a fabricated time',()=>{const d=createDataset();assert.equal(peakHour(d).am,null);addRows(d,salesHeaders,[sale('2026-08-24T23:30:00')]);assert.equal(peakHour(d).am,null);assert.ok(peakHour(d).pm);});
+test('same product on multiple sale lines is preserved',()=>{const d=seed();addReferenceRows(d,'product',STRUCTURES.product,[[10,'Cappuccino']]);addRows(d,salesHeaders,[sale(undefined,1,1),sale(undefined,1,2)]);const r=normalizados(d,{store:'38368'});assert.equal(r.sizes[0].hot,2);assert.equal(r.cups[0].name,'Vaso de Papel 12 oz');assert.equal(r.cups[0].ready,true);});
+test('cup joins require agreement between tbl, WOE and CeCo',()=>{const d=seed();addReferenceRows(d,'product',STRUCTURES.product,[[10,'Cappuccino']]);addRows(d,salesHeaders,[sale()]);d.woeCatalog.get('vasodepapel12oz').compostable=true;const cup=normalizados(d,{store:'38368'}).cups[0];assert.equal(cup.ready,false);assert.match(cup.reason,/Conflicto/);});
+test('FHW compensates quantity without a disposable cup',()=>{const d=seed();addReferenceRows(d,'product',STRUCTURES.product,[[10,'Cappuccino'],[11,'Taza Bebida Cal']]);addRows(d,salesHeaders,[sale(undefined,1,1,10,2),sale(undefined,1,2,11)]);const r=normalizados(d,{store:'38368'});assert.equal(r.sizes[0].hot,1);assert.equal(r.fhw,1);});
+test('sales returns are separate from normalized positive demand',()=>{const d=seed();addReferenceRows(d,'product',STRUCTURES.product,[[10,'Cappuccino']]);addRows(d,salesHeaders,[sale(undefined,1,1),sale(undefined,2,1,10,-1,-50)]);const r=normalizados(d);assert.equal(r.sizes[0].hot,1);assert.equal(r.returns,1);});
+test('cream table classifies indications only, not implicit recipes',()=>{const d=seed();addReferenceRows(d,'product',STRUCTURES.product,[[10,'C/Crema Batida'],[11,'S/Crema Batida']]);addRows(d,salesHeaders,[sale(undefined,1,1,10,2),sale(undefined,1,2,11)]);const r=normalizados(d);assert.equal(r.cream.with,2);assert.equal(r.cream.without,1);});
+test('baking combines trays and requires all stock captures',()=>{const d=seed();addReferenceRows(d,'product',STRUCTURES.product,[[10,'Test croissant'],[11,'Test pan']]);d.foodRules.set('testcroissant',{bis:true,bakingName:'Croissant Mantequilla',pieces:1});d.foodRules.set('testpan',{bis:true,bakingName:'Pan de Chocolate',pieces:1});addRows(d,salesHeaders,[sale('2026-09-06T09:00:00',1,1,10,3),sale('2026-09-06T09:30:00',1,2,11,2)]);const settings={date:'2026-09-13',slot:0};assert.equal(bakingForecast(d,{}, {},settings).groups[0].trays,null);const r=bakingForecast(d,{}, {croissantmantequilla:{stock:0},pandechocolate:{stock:0}},settings);assert.equal(r.groups[0].trays,1);assert.equal(r.days,1);});
+test('baking does not treat future or different weekdays as observed history',()=>{const d=seed();addRows(d,salesHeaders,[sale('2026-09-14T09:00:00')]);assert.equal(bakingForecast(d,{}, {},{date:'2026-09-13'}).days,0);});
+test('void details retain separate line identities and negative orders are not counted twice',()=>{const d=createDataset();const h=[...STRUCTURES.auditVoid,'SecTrans','SecDtl','Id'];addAuditRows(d,'auditVoid',h,[[38368,'2026-08-24T09:00:00',1,10,206,'Otros',-50,1,1,17],[38368,'2026-08-24T09:00:00',1,10,206,'Otros',-50,1,2,18]]);addAuditRows(d,'auditTicket',STRUCTURES.auditTicket,[[38368,1,'2026-08-24',1,-100,'2026-08-24']]);const r=auditStore(d);assert.equal(d.auditVoids.length,2);assert.equal(r.items.length,1);assert.equal(r.negativeAmount,100);assert.equal(r.voidCount,1);});
+test('only available motor capabilities appear in menu',()=>{const d=seed();assert.equal(availableModules(d).length,0);addUsageRows(d,usageHeaders,[use()]);assert.deepEqual(availableModules(d).map(m=>m.id),['maxmin','trend','order']);});
+test('per-menu reports cannot leak other modules or blocked orders',()=>{const d=createDataset();addUsageRows(d,usageHeaders,[use()]);const r=inventory(d);const report=reportFor('maxmin',r);assert.deepEqual(report.sheets.map(s=>s.name),['Tarjetas']);const order=reportFor('order',r,{orders:[{blocked:true,quantity:2}]});assert.equal(order.sheets[0].rows.length,0);});
+test('same-period Normalizados cup demand drives WOE with traceable comparison',()=>{const d=seed();addReferenceRows(d,'product',STRUCTURES.product,[[10,'Cappuccino']]);addRows(d,salesHeaders,[sale(undefined,1,1,10,3)]);addUsageRows(d,usageHeaders,[use(undefined,99,8,'PZA:','Vaso de Papel 12 oz')]);const nr=normalizados(d,{store:'38368'});assert.equal(nr.cups[0].actualUse,8);assert.equal(nr.cups[0].difference,5);const r=inventory(d,{store:'38368',normalizedCups:true}).items[0];assert.equal(r.average,3);assert.equal(r.reportedUse,8);assert.equal(r.usageSource,'Normalizados');});
+test('misaligned dates and filtered channels never compare total inventory use',()=>{const d=seed();addReferenceRows(d,'product',STRUCTURES.product,[[10,'Cappuccino']]);addRows(d,salesHeaders,[sale()]);addUsageRows(d,usageHeaders,[use('2026-08-25',99,8,'PZA:','Vaso de Papel 12 oz')]);assert.equal(normalizados(d,{store:'38368'}).cups[0].actualUse,null);addUsageRows(d,usageHeaders,[use('2026-08-24',99,8,'PZA:','Vaso de Papel 12 oz')]);assert.equal(normalizados(d,{store:'38368',mode:'Mostrador'}).cups[0].actualUse,null);});
