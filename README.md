@@ -27,7 +27,7 @@ La interfaz analiza libros `.xlsx` y `.xlsm` directamente en el navegador, sin e
 | Histórico Inventario | Base de 21 días, solo lectura | Uso, merma, variación e histórico acumulado |
 | Máx & Mín | Pick Pack / Unidad | Recomendación por empaque y número de pedidos |
 | Peak Hour 2.0 | `Dashboard_PeakHour` / `Foco_PH` | Hora pico real, diferencia y periodo |
-| Bebida & Alimento | Tres pestañas del reporte | `Reporte_Normalizado_v2` |
+| Normalizados | Vaso, tapa y crema batida | Detecta `Reporte Normalizado_v2` y sus archivos de reglas |
 
 ## Contenido del ZIP
 
