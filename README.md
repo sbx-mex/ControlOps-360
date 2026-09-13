@@ -21,3 +21,5 @@ node --test tests/*.test.mjs
 ```
 
 Aplicación: [https://sbx-mex.github.io/ControlOps-360/](https://sbx-mex.github.io/ControlOps-360/)
+
+Versión actual: `4.0.0`.
