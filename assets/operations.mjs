@@ -111,12 +111,22 @@ export function inventory(d,f={},overrides={}){
   const byName=new Map(normalized.cups.filter(c=>c.ready&&c.comparable).map(c=>[normalize(c.name),c]));
   for(const item of rows){const cup=byName.get(normalize(item.name));if(!cup)continue;item.usageSource='Normalizados';item.reportedUse=item.totalUse;item.totalUse=cup.quantity;item.average=cup.quantity/days;if(!item.adjusted)item.minimum=item.average;item.maximum=item.minimum*ORDER_FACTOR[orders];}
  }
- rows.sort((a,b)=>a.name.localeCompare(b.name,'es'));
+ rows.sort((a,b)=>b.average-a.average||a.name.localeCompare(b.name,'es'));
  return {items:rows,days,dates,orders,policy,from:dates[0]||'',to:dates.at(-1)||'',excluded:rows.filter(r=>r.blocked).length,codeVerified:rows.filter(r=>r.woe?.codeVerified).length};
 }
+export function sleeveFor(item){
+ const text=normalize([item?.family,item?.name,item?.sapName,item?.microsName,item?.stock?.name,item?.woe?.description].filter(Boolean).join(' '));
+ if(/tapa|lid/.test(text))return {kind:'Tapa',size:100,label:'Manga 100 pzas'};
+ if(!/vaso|cup/.test(text))return null;
+ const paper20=/(vasodepapel.*20oz|20oz.*vasodepapel|papercup.*20oz|20oz.*papercup)/.test(text);
+ const size=paper20?40:50;
+ return {kind:'Vaso',size,label:`Manga ${size} pzas`};
+}
 export function minmaxValues(item,mode='unit'){
- const pack=item.p.stockPack;
- return {minimum:mode==='pack'?(pack?epsCeil(item.minimum/pack):null):item.minimum,maximum:mode==='pack'?(pack?epsCeil(item.maximum/pack):null):item.maximum,unit:mode==='pack'?(item.stock?.pickPack||'Pick Pack sin validar'):item.unit};
+ const sleeve=sleeveFor(item),pack=mode==='sleeve'?sleeve?.size:(item.p.stockPack||item.p.woePack);
+ if(mode==='unit')return {minimum:item.minimum,maximum:item.maximum,unit:item.unit,packSize:1};
+ const label=mode==='sleeve'?sleeve?.label:(item.stock?.pickPack||item.woe?.ump||'Pick Pack sin validar');
+ return {minimum:pack?epsCeil(item.minimum/pack):null,maximum:pack?epsCeil(item.maximum/pack):null,unit:label||'Pick Pack sin validar',packSize:pack||null};
 }
 
 export function coverageDays(today,end,fraction=1){const a=dateParts(today),b=dateParts(end);if(!a||!b||b.dayMs<a.dayMs||!Number.isFinite(Number(fraction)))return null;const days=(b.dayMs-a.dayMs)/DAY_MS;return days===0?Math.min(0.5,Math.max(0,Number(fraction))):days-0.5+Math.min(1,Math.max(0,Number(fraction)));}
@@ -219,10 +229,19 @@ export function reportFor(module,result,context={}){
  const report={title,store:context.store||'',period:shortPeriod(r.from,r.to),filters:context.filterLabel||'',summary:[],sheets:[]};
  const sheet=(name,headers,rows)=>report.sheets.push({name,headers,rows});
  if(module==='maxmin'){
-  const selected=new Set(context.selectedKeys||[]),items=selected.size?r.items.filter(i=>selected.has(i.key)):[];
-  report.layout='labels';report.summary=[['Etiquetas seleccionadas',items.length],['Días observados',r.days],['Pedidos por semana',r.orders]];
-  report.cards=items.map(i=>{const mode=context.modes?.[i.key]||context.mode,c=minmaxValues(i,mode);return {...c,name:context.nameMode==='micros'?i.microsName:i.sapName,sapName:i.sapName,microsName:i.microsName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',daily:i.average,mode,adjusted:i.adjusted};});
-  sheet('Lista Max Min',['Nombre SAP','Nombre MICROS','Código SAP','Código DIA','Validación códigos','Familia','Uso diario','Mínimo','Máximo','Formato','Presentación'],items.map(i=>{const mode=context.modes?.[i.key]||context.mode,c=minmaxValues(i,mode);return [i.sapName,i.microsName,i.woe?.sap||'',i.woe?.dia||'',i.codeValidation||'',i.family,Number(i.average.toFixed(1)),c.minimum,c.maximum,mode==='pack'?'Pick Pack':'Unidad',c.unit];}));
+  const selected=new Set(context.selectedKeys||[]),items=selected.size?r.items.filter(i=>selected.has(i.key)):[],priority=new Map(r.items.map((i,index)=>[i.key,index+1]));
+  report.layout=context.outputView==='list'?'maxmin-list':'labels';report.hideSummary=true;report.summary=[['Productos seleccionados',items.length],['Días observados',r.days],['Pedidos por semana',r.orders]];
+  const cards=items.map(i=>{const mode=context.modes?.[i.key]||context.mode,c=minmaxValues(i,mode);return {...c,name:i.sapName,sapName:i.sapName,microsName:i.microsName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',daily:i.minimum,mode,orders:r.orders,priority:priority.get(i.key),adjusted:i.adjusted};});
+  if(report.layout==='labels')report.cards=cards;
+  else report.listCards=cards.map((card,index)=>({...card,priority:priority.get(items[index].key),family:items[index].family}));
+  report.sheets.push({name:'Uso Unidad',headers:['Prioridad','Nombre SAP','Código SAP','Código DIA','Familia','Pedidos / semana','Uso diario','Mínimo','Máximo','Unidad','Origen','Validación'],rows:items.map(i=>[priority.get(i.key),i.sapName,i.woe?.sap||'',i.woe?.dia||'',i.family,r.orders,Number(i.minimum.toFixed(1)),Number(i.minimum.toFixed(1)),Number(i.maximum.toFixed(1)),i.unit,i.adjusted?'Ajustado por usuario':'Calculado',i.codeValidation||'']),formats:['integer',null,null,null,null,'integer','oneDecimal','oneDecimal','oneDecimal'],widths:[10,38,14,14,22,15,13,13,13,18,20,26]});
+  const packRows=[];
+  for(const i of items){
+   const base={priority:priority.get(i.key),name:i.sapName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',family:i.family,orders:r.orders,validation:i.codeValidation||''},pack=minmaxValues(i,'pack'),candidates=[{format:'Pick Pack',values:pack}];
+   const sleeve=sleeveFor(i);if(sleeve&&sleeve.size!==pack.packSize)candidates.push({format:'Manga',values:minmaxValues(i,'sleeve')});
+   for(const candidate of candidates){const c=candidate.values,valid=!!c.packSize;packRows.push([base.priority,base.name,base.sap,base.dia,base.family,base.orders,candidate.format,c.packSize||'',valid?Number((i.minimum/c.packSize).toFixed(2)):'',c.minimum??'',c.maximum??'',c.unit,valid?base.validation:'Sin equivalencia de empaque']);}
+  }
+  report.sheets.push({name:'Pick Pack',headers:['Prioridad','Nombre SAP','Código SAP','Código DIA','Familia','Pedidos / semana','Formato','Unidades / formato','Uso diario / formato','Mínimo','Máximo','Presentación','Validación'],rows:packRows,formats:['integer',null,null,null,null,'integer',null,'oneDecimal','twoDecimal','integer','integer'],widths:[10,38,14,14,22,15,14,18,19,12,12,24,28]});
  }
  if(module==='trend'){report.summary=[['Productos',r.items.length],['Días observados',r.days]];sheet('Uso por día',['Producto','Unidad','Uso total','Promedio diario',...DAY_LABELS],r.items.map(i=>[i.name,i.unit,i.totalUse,i.average,...i.weekday.map(x=>x.average)]));}
  if(module==='order'){report.summary=[['Días observados',r.days],['Artículos bloqueados',r.excluded]];const ready=(context.orders||[]).filter(x=>!x.blocked&&x.quantity>0);sheet('Pedido',['Producto','SAP','DIA','Proveedor','Unidad WOE','Cantidad','Existencia','Tránsito','Cobertura hasta'],ready.map(x=>[x.item.name,x.item.woe.sap,x.item.woe.dia,x.item.woe.provider,x.item.woe.ump,x.quantity,x.stock,x.transit,x.end]));sheet('Base del pedido',['Producto','Base de uso','Unidad de captura','Uso diario','Días de cobertura','Demanda','Faltante'],ready.map(x=>[x.item.name,x.item.usageSource||'Uso ideal _ac',x.item.unit,x.item.minimum,x.coverage,x.demand,x.missing]));}

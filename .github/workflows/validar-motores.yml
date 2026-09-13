@@ -18,17 +18,26 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+      - name: Instalar dependencias Python
+        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
       - name: Ejecutar pruebas
         run: python -m unittest discover -s tests -v
       - name: Compilar motor Python
-        run: python -m py_compile scripts/compatibilidad_xlsm.py
+        run: python -m py_compile scripts/*.py
       - name: Probar motor JavaScript
         run: node --test tests/*.test.mjs
+      - name: Validar exportación Max & Min
+        run: |
+          node tests/generar_exportacion_max_min.mjs /tmp/max_min_validacion.xlsx
+          python scripts/validar_exportacion_max_min.py /tmp/max_min_validacion.xlsx
       - name: Validar interfaz pública
         run: |
           node --check assets/app.js
           node --check assets/engine.mjs
           node --check assets/export.mjs
+          node --check assets/operations.mjs
+          node --check assets/ui.mjs
       - name: Impedir bases operativas
         run: |
           if git ls-files | grep -Ei '\.(xls|xlsx|xlsm|xlsb|csv|tsv)$'; then

@@ -59,11 +59,13 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertIn("createExecutiveWorkbook(report)", self.ui)
         self.assertIn("createExecutivePdf(report)", self.ui)
     def test_maxmin_is_selectable_compact_and_multi_filter(self):
-        for token in ('data-multi-filter=', 'data-maxmin-select=', 'step="0.1"', 'PDF etiquetas', 'Nombre SAP', 'Nombre MICROS'):
+        for token in ('data-multi-filter=', 'data-maxmin-select=', 'step="0.1"', 'PDF etiquetas', 'primary=i.sapName', "'outputView','Ver en'", 'sleeveLine=sleeve'):
             self.assertIn(token, self.ui)
         export = (ROOT / "assets" / "export.mjs").read_text()
-        self.assertIn("perPage=12", export)
+        self.assertIn("report.cards.length>6", export)
+        self.assertIn("PEDIDOS / SEMANA", export)
         self.assertIn("/MediaBox [0 0 792 612]", export)
+        self.assertNotIn("'Nombre visible'", self.ui)
     def test_separate_module_flows(self):
         for name in ("maxminView", "trendView", "orderView", "peakView", "normalView", "bakingView", "topView", "auditView", "aboutView"):
             self.assertIn("function " + name, self.ui)
