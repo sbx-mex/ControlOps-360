@@ -44,6 +44,23 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertNotIn("fetch(", app)
         self.assertNotIn("XMLHttpRequest", app)
 
+    def test_carga_multiple_es_exclusiva_para_xlsm(self):
+        self.assertIn('accept=".xlsm,application/vnd.ms-excel.sheet.macroEnabled.12"', self.html)
+        self.assertIn(" multiple hidden", self.html)
+        self.assertNotIn(".xlsx", self.html.lower())
+
+    def test_interfaz_no_exporta_diagnosticos_ni_usa_demo(self):
+        combined = self.html + (ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        self.assertNotIn("Exportar diagnóstico", combined)
+        self.assertNotIn("demoButton", combined)
+
+    def test_motor_estructural_esta_versionado(self):
+        engine = ROOT / "assets" / "engine.mjs"
+        self.assertTrue(engine.is_file())
+        text = engine.read_text(encoding="utf-8")
+        self.assertIn("matchStructure", text)
+        self.assertIn("IDTienda", text)
+
 
 if __name__ == "__main__":
     unittest.main()

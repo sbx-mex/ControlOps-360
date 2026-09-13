@@ -1,7 +1,8 @@
-config/conexiones.local.json
-diagnostico_controlops.json
-*.xlsm
+*.xls
 *.xlsx
-!ControlOps360_Propuesta_V1.xlsx
+*.xlsm
+*.xlsb
+*.csv
+*.tsv
 __pycache__/
-
+.DS_Store
