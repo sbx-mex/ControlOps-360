@@ -4,24 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#006241">
-  <meta name="description" content="Análisis local de archivos XLSM operativos por estructura.">
+  <meta name="description" content="Resumen ejecutivo local de operación, Peak Hour e inventario.">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23006241'/%3E%3Cpath d='M18 22h28M18 32h20M18 42h14' stroke='white' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='45' cy='42' r='7' fill='%23d4e9e2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="assets/styles.css">
   <title>ControlOps 360</title>
 </head>
 <body>
-  <a class="skip-link" href="#workspace">Ir al análisis</a>
-
+  <a class="skip-link" href="#workspace">Ir al resumen</a>
   <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">C</span>
-      <div>
-        <strong>ControlOps 360</strong>
-        <span>Motor de lectura local</span>
-      </div>
-    </div>
+    <div class="brand"><span class="brand-mark" aria-hidden="true">C</span><div><strong>ControlOps 360</strong><span>Resumen para gerente</span></div></div>
     <div class="top-actions">
+      <button class="button button-export" id="excelButton" type="button" hidden>Excel</button>
+      <button class="button button-export" id="pdfButton" type="button" hidden>PDF</button>
       <button class="button button-ghost" id="resetButton" type="button">Limpiar</button>
       <button class="button button-primary" id="uploadButton" type="button">Cargar XLSM</button>
       <input id="fileInput" type="file" accept=".xlsm,application/vnd.ms-excel.sheet.macroEnabled.12" multiple hidden>
@@ -29,75 +24,80 @@
   </header>
 
   <main id="workspace" class="page-shell">
-    <section class="status-strip" aria-label="Privacidad y fuente">
-      <span class="privacy-icon" aria-hidden="true">✓</span>
-      <div>
-        <strong>Lectura local de _ac</strong>
-        <span>Valida columnas, no el nombre del archivo. Los libros no se modifican ni se envían a internet.</span>
-      </div>
-      <span class="version">V2</span>
-    </section>
-
     <p class="progress" id="progressText" role="status" aria-live="polite" hidden></p>
 
     <section id="emptyState" class="empty-state">
-      <span class="eyebrow">Carga operativa</span>
-      <h1>Agrega uno o varios archivos .xlsm</h1>
-      <p>El motor encuentra la pestaña <strong>_ac</strong> y valida su estructura. Nombres como <strong>Normalizados (1).xlsm</strong> funcionan igual.</p>
+      <span class="eyebrow">Resumen ejecutivo</span>
+      <h1>Carga tus archivos actualizados</h1>
+      <p>Uno o varios .xlsm. El nombre no importa.</p>
       <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="Seleccionar archivos XLSM">
-        <strong>Seleccionar archivos .xlsm</strong>
-        <span>o arrástralos a esta zona</span>
+        <strong>Seleccionar XLSM</strong><span>o arrástralos aquí</span>
       </div>
-      <p class="support-note">Si cargas el mismo archivo dos veces, se omite aunque tenga otro nombre.</p>
     </section>
 
     <section id="dashboard" hidden>
-      <section class="summary-grid" aria-label="Resumen de carga">
-        <article class="metric-card"><span>Archivos compatibles</span><strong id="filesMetric">0</strong></article>
-        <article class="metric-card"><span>Tiendas</span><strong id="storesMetric">0</strong></article>
-        <article class="metric-card"><span>Filas únicas</span><strong id="rowsMetric">0</strong></article>
-        <article class="metric-card"><span>Duplicados omitidos</span><strong id="duplicatesMetric">0</strong></article>
+      <section class="filter-panel" aria-label="Filtros del resumen">
+        <label>CeCo<select id="storeFilter"><option value="">Todas</option></select></label>
+        <label>Desde<input id="dateFrom" type="date"></label>
+        <label>Hasta<input id="dateTo" type="date"></label>
+        <label>Día<select id="weekdayFilter"><option value="">Todos</option><option value="0">Lunes</option><option value="1">Martes</option><option value="2">Miércoles</option><option value="3">Jueves</option><option value="4">Viernes</option><option value="5">Sábado</option><option value="6">Domingo</option></select></label>
+        <label>Canal<select id="modeFilter"><option value="">Todos</option></select></label>
+        <label class="search-filter">Producto<input id="productFilter" type="search" placeholder="ID o nombre"></label>
+        <button class="filter-reset" id="clearFilters" type="button">Restablecer</button>
       </section>
 
-      <section class="detail-grid">
-        <aside class="source-panel" aria-labelledby="sourcesTitle">
-          <div class="panel-heading">
-            <div>
-              <span class="eyebrow">Fuentes</span>
-              <h2 id="sourcesTitle">Archivos cargados</h2>
-            </div>
-          </div>
-          <ul class="file-list" id="fileList"></ul>
-          <div class="compact-metrics">
-            <div><span>Transacciones</span><strong id="transactionsMetric">0</strong></div>
-            <div><span>Productos</span><strong id="productsMetric">0</strong></div>
-            <div><span>Excepciones</span><strong id="exceptionsMetric">0</strong></div>
-          </div>
-        </aside>
+      <div class="report-heading">
+        <div><span class="eyebrow">Resumen ejecutivo</span><h1 id="storeTitle">Todas las tiendas</h1><p id="periodTitle">—</p></div>
+        <details class="source-summary"><summary id="sourceSummary">Archivos</summary><ul id="fileList"></ul></details>
+      </div>
 
-        <section class="analysis-panel" aria-labelledby="viewTitle">
-          <nav class="view-nav" id="viewNav" aria-label="Vistas del análisis">
-            <button class="view-button active" type="button" data-view="summary" aria-pressed="true">Resumen</button>
-            <button class="view-button" type="button" data-view="exceptions" aria-pressed="false">Excepciones</button>
-            <button class="view-button" type="button" data-view="products" aria-pressed="false">Productos</button>
-            <button class="view-button" type="button" data-view="hours" aria-pressed="false">Horas</button>
-            <button class="view-button" type="button" data-view="modes" aria-pressed="false">Modo orden</button>
-            <button class="view-button" type="button" data-view="records" aria-pressed="false">Registros</button>
-          </nav>
-          <div class="table-toolbar">
-            <div>
-              <h2 id="viewTitle">Resumen de lectura</h2>
-              <p id="viewMeta"></p>
-            </div>
+      <section class="summary-grid" aria-label="Indicadores principales">
+        <article class="metric-card"><span>Venta neta</span><strong id="salesMetric">$0</strong></article>
+        <article class="metric-card"><span>Órdenes</span><strong id="ordersMetric">0</strong></article>
+        <article class="metric-card"><span>Ticket promedio</span><strong id="ticketMetric">$0</strong></article>
+        <article class="metric-card"><span>UPT</span><strong id="uptMetric">0.0</strong></article>
+      </section>
+
+      <section class="impact-grid">
+        <article class="panel peak-card">
+          <div class="panel-title"><div><span class="eyebrow">Peak Hour</span><h2>Dos horas que requieren foco</h2></div><span class="goal-chip">Meta +5</span></div>
+          <div class="peak-pairs">
+            <div><span>AM · 05:00–15:00</span><strong id="peakAmTime">—</strong><small id="peakAmOrders">0 órdenes/día</small></div>
+            <div><span>PM · 15:00–23:00</span><strong id="peakPmTime">—</strong><small id="peakPmOrders">0 órdenes/día</small></div>
           </div>
-          <div class="table-scroll">
-            <table id="dataTable">
-              <thead></thead>
-              <tbody></tbody>
-            </table>
+        </article>
+        <article class="panel focus-card">
+          <span class="eyebrow">Enfoque gerente</span><h2>Qué mover hoy</h2><ol id="focusList"><li>Sin datos en el filtro.</li></ol>
+        </article>
+      </section>
+
+      <section class="analysis-grid">
+        <article class="panel table-panel">
+          <div class="panel-title"><div><span class="eyebrow">Tabla dinámica</span><h2>Peak por día</h2></div><small>4 bloques de 30 min</small></div>
+          <div class="table-scroll"><table><thead><tr><th>Día</th><th>Peak AM</th><th>Órd./día</th><th>Peak PM</th><th>Órd./día</th></tr></thead><tbody id="peakTable"></tbody></table></div>
+        </article>
+        <article class="panel table-panel">
+          <div class="panel-title"><div><span class="eyebrow">Venta</span><h2>Productos que mueven el resultado</h2></div><small id="productCount">0 productos</small></div>
+          <div class="table-scroll"><table><thead><tr><th>Producto</th><th>Unidades</th><th>Venta</th></tr></thead><tbody id="productTable"></tbody></table></div>
+        </article>
+      </section>
+
+      <section class="panel channel-panel">
+        <div class="panel-title"><div><span class="eyebrow">Canales</span><h2>Dónde se genera la venta</h2></div></div>
+        <div id="channelBars" class="channel-bars"></div>
+      </section>
+
+      <section class="panel inventory-panel" id="inventoryPanel" hidden>
+        <div class="inventory-heading">
+          <div><span class="eyebrow">Max & Min</span><h2>Uso acumulado y preparación de pedido</h2><p id="usagePeriod">—</p></div>
+          <div class="inventory-filters">
+            <label># pedidos<select id="ordersFilter"><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label>
+            <label>Tipo<select id="compostableFilter"><option value="all">Todos</option><option value="yes">Compostable</option><option value="no">No compostable</option></select></label>
+            <label>Artículo<input id="usageFilter" type="search" placeholder="Buscar"></label>
           </div>
-          <div id="tableEmpty" class="table-empty">No hay registros para esta vista.</div>
-        </section>
+        </div>
+        <p class="microcopy">El uso mínimo es editable. El máximo se ajusta según la frecuencia de pedido.</p>
+        <div class="table-scroll inventory-scroll"><table><thead><tr><th>Artículo</th><th>Tipo</th><th id="usageTotalHeader">Uso acumulado</th><th>Uso mínimo diario</th><th>Máximo</th><th>Unidad pedido</th><th>Máx. a pedir</th></tr></thead><tbody id="usageTable"></tbody></table></div>
       </section>
     </section>
   </main>
