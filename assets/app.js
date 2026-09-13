@@ -42,12 +42,21 @@ const MODULES = [
     hints: ["peak hour", "peakhour"],
   },
   {
-    id: "bebida",
-    title: "Bebida & Alimento",
-    short: "3 pestañas",
-    description: "Prepara las tres pestañas del reporte para su futura salida Reporte_Normalizado_v2.",
-    sheets: ["Bebidas", "Alimentos", "Resumen"],
-    hints: ["bebida alimento", "bebidas alimentos"],
+    id: "normalizados",
+    title: "Normalizados",
+    short: "Vaso y crema",
+    description: "Reconoce el reporte normalizado real y separa resultados, bases de 20 días, históricos y reglas.",
+    sheets: [
+      "Tamanos",
+      "Vaso&Tapa",
+      "Crema Batida",
+      "base_cb",
+      "historico_cb",
+      "base_vaso",
+      "historico_vaso",
+      "Reglas",
+    ],
+    hints: ["reporte normalizado", "normalizado v2", "normalizados"],
   },
 ];
 
@@ -342,8 +351,8 @@ function renderMetrics() {
   const alerts = auditRows().length;
   elements.filesMetric.textContent = state.demo ? "Demo" : state.files.length;
   elements.filesDetail.textContent = state.demo ? "Datos ilustrativos" : state.files.length ? `${state.files.length} archivo(s) local(es)` : "Sin archivos";
-  elements.modulesMetric.textContent = `${detected}/6`;
-  elements.modulesDetail.textContent = detected === 6 ? "Motor completo" : detected ? "Mapeo parcial" : "Esperando fuentes";
+  elements.modulesMetric.textContent = `${detected}/${MODULES.length}`;
+  elements.modulesDetail.textContent = detected === MODULES.length ? "Motor completo" : detected ? "Mapeo parcial" : "Esperando fuentes";
   elements.alertsMetric.textContent = formatNumber(alerts);
   elements.alertsDetail.textContent = alerts ? "Requieren revisión" : "Sin alertas";
   elements.alertsMetric.closest(".metric-card").classList.toggle("has-alert", alerts > 0);
@@ -380,7 +389,7 @@ function renderModule(moduleId) {
   const ready = sheetNames.length > 0;
   elements.emptyState.hidden = true;
   elements.moduleView.hidden = false;
-  elements.moduleEyebrow.textContent = `Módulo ${MODULES.indexOf(module) + 1} de 6`;
+  elements.moduleEyebrow.textContent = `Módulo ${MODULES.indexOf(module) + 1} de ${MODULES.length}`;
   elements.moduleTitle.textContent = module.title;
   elements.moduleDescription.textContent = module.description;
   elements.moduleStatus.textContent = ready ? "Listo" : "Pendiente";
@@ -492,9 +501,14 @@ function loadDemo() {
     [["Lunes", 74, 69, -5, "09:30–11:30"], ["Martes", 88, 91, 3, "08:30–10:30"]]
   );
   state.moduleData.peak.sheets.Foco_PH = demoSheet(["Día", "Inicio", "Fin"], [["Lunes", "09:30", "11:30"]]);
-  state.moduleData.bebida.sheets.Bebidas = demoSheet(["Artículo", "Unidades", "Venta"], [["Latte", 128, 8450]]);
-  state.moduleData.bebida.sheets.Alimentos = demoSheet(["Artículo", "Unidades", "Venta"], [["Croissant", 54, 3510]]);
-  state.moduleData.bebida.sheets.Resumen = demoSheet(["TipoProducto", "Unidades", "Venta"], [["Bebida", 128, 8450], ["Alimento", 54, 3510]]);
+  state.moduleData.normalizados.sheets["Vaso&Tapa"] = demoSheet(
+    ["IDTienda", "FechaHora", "Normalizado", "Vaso", "Conteo"],
+    [[38368, "2026-09-13 08:15", "Vaso", "1_Caliente", 1]]
+  );
+  state.moduleData.normalizados.sheets["Crema Batida"] = demoSheet(
+    ["IDTienda", "FechaHora", "Descripcion", "Aplica Normalizado"],
+    [[38368, "2026-09-13 08:15", "C/Crema Batida", "Si"]]
+  );
   state.selectedModule = "auditoria";
   renderAll();
   showToast("Demostración cargada. Los datos son ilustrativos.");
