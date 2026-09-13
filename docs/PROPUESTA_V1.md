@@ -72,10 +72,12 @@ flowchart TD
 - Conserva `Dashboard_PeakHour` y `Foco_PH` como fuentes.
 - Normaliza semana, día, franja de 30 minutos, transacciones y periodo foco.
 
-### Bebida & Alimento
+### Normalizados
 
-- Las tres pestañas alimentan un solo `Reporte_Normalizado_v2`.
-- Debe existir un campo `TipoProducto` para separar Bebida, Alimento y Total.
+- El extractor conserva únicamente las bases móviles de 20 días: `Detalle_CB` y `detallevaso`.
+- Los históricos `historicocb` y `historicovaso` viven fuera del extractor para evitar que el libro crezca en cada actualización.
+- Las reglas de negocio se mantienen en `tbl_normalizado_crema.xlsx` y `tbl_normalizado_vaso.xlsx`.
+- Las vistas `Tamanos`, `Vaso&Tapa` y `Crema Batida` consumen los históricos validados; no abren conexiones SQL propias.
 
 ## Controles mínimos antes de publicar
 
@@ -91,4 +93,3 @@ flowchart TD
 ## Resultado esperado
 
 Un solo punto de entrada para el gerente de tienda, con trazabilidad de cada actualización y sin necesidad de navegar entre hojas técnicas. El proyecto web puede consumir las tablas normalizadas más adelante sin cambiar la captura en Excel.
-
