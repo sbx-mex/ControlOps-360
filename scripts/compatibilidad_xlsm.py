@@ -29,6 +29,8 @@ STRUCTURES = {
     "productos": ("IDProducto", "Descripcion"),
     "tienda": ("IDTienda", "Tienda"),
     "presentaciones": ("IDArticulo", "NombreArticuloStock", "PickPack", "UnidadStock"),
+    "lista_sap": ("ID WOE", "Codigo DIA", "Descripcion SAP"),
+    "catalogo_micros": ("Familia", "Nombre Micros", "Codigo DIA", "Proveedor"),
     "compostable": ("inven_itm_name", "Compostable"),
     "woe": ("Nombre Micros", "#SAP", "#DIA", "Descripcion WOE", "UMB WOE Cantidad pedido"),
     "horneo": ("Grupo de horneo", "Producto en reporte", "Descongelacion", "Horneo", "Temperatura", "Máximo por charola", "Se puede hornear junto"),
@@ -196,15 +198,19 @@ def motor_kind(result: Result) -> str:
         groups.append("uso")
     if kinds & {"auditoria_ticket", "auditoria_void", "auditoria_pago"}:
         groups.append("auditoria")
+    if not groups and kinds & {"lista_sap", "catalogo_micros"}:
+        groups.append("lista_precios")
     return "+".join(sorted(groups))
 
 
-def freshness_key(path: Path, result: Result) -> tuple[str, int, int, int]:
+def freshness_key(path: Path, result: Result) -> tuple[str, int, int, int, int]:
     latest = max((source.latest_date or "" for source in result.sources), default="")
     coverage = max((source.observed_days for source in result.sources), default=0)
+    match = re.search(r"20\d{6}[-_]?\d{6}", path.name)
+    name_timestamp = int(re.sub(r"\D", "", match.group())) if match and motor_kind(result) == "lista_precios" else 0
     modified = path.stat().st_mtime_ns if path.exists() else 0
     rows = sum(source.rows for source in result.sources)
-    return latest, coverage, modified, rows
+    return latest, coverage, name_timestamp, modified, rows
 
 
 def select_most_recent(items: Iterable[tuple[Path, Result]]) -> tuple[list[Path], list[Path]]:
@@ -266,13 +272,13 @@ def inspect_workbook(path: Path) -> Result:
                     roles = [
                         kind for kind in kinds
                         if (kind in {"venta", "uso", "auditoria_ticket", "auditoria_void", "auditoria_pago"} and is_ac_source(sheet_name))
-                        or kind in {"productos", "tienda", "presentaciones", "compostable", "woe", "horneo", "alimentos", "vasos", "crema", "politica_tienda"}
+                        or kind in {"productos", "tienda", "presentaciones", "lista_sap", "catalogo_micros", "compostable", "woe", "horneo", "alimentos", "vasos", "crema", "politica_tienda"}
                     ]
                     source = Source(sheet_name, table_name, reference, table_row_count(reference), columns, roles)
                     candidates.append((source, match_structure(columns)[1]))
 
             selected = [source for source, _ in candidates if source.roles]
-            parameter_roles = {"woe", "horneo", "compostable", "alimentos", "vasos", "crema", "politica_tienda"}
+            parameter_roles = {"woe", "lista_sap", "catalogo_micros", "horneo", "compostable", "alimentos", "vasos", "crema", "politica_tienda"}
             allowed = parameter_roles if suffix == ".xlsx" else set(STRUCTURES)
             selected = [source for source in selected if any(role in allowed for role in source.roles)]
             useful = any(role in (parameter_roles if suffix == ".xlsx" else {"venta", "uso", "auditoria_ticket", "auditoria_void", "auditoria_pago"}) for source in selected for role in source.roles)

@@ -41,6 +41,18 @@ export function unitSpec(value){
  return {dim,base,multiplier,label:multiplier>1?'Piezas':value||'Unidad sin definir',text,basePerUnit:base/multiplier};
 }
 function lookupName(catalog,name){const key=normalize(name),matches=[...catalog.values()].filter(r=>normalize(r.name||r.micros)===key);return matches.length===1?matches[0]:null;}
+export function resolveInventoryCodes(d,item,baseWoe){
+ const listReady=d.sapCatalog?.size>0,micros=d.microsCatalog?.get(normalize(item.name)),microsDia=micros&&!micros.ambiguous?micros.dia:'',sap=baseWoe?.sap||'',dia=baseWoe?.dia||microsDia;
+ if(!listReady)return {woe:baseWoe,validation:'Lista SAP no cargada',blocked:false};
+ const bySap=sap?d.sapCatalog.get(sap):null,byDia=dia?d.sapDiaCatalog.get(dia):null,official=bySap||byDia;
+ const conflict=!!((bySap&&dia&&bySap.dia!==dia)||(byDia&&sap&&byDia.sap!==sap)||(bySap&&byDia&&bySap.sap!==byDia.sap));
+ if(conflict)return {woe:baseWoe,validation:'Conflicto SAP/DIA',blocked:true};
+ if(baseWoe&&official)return {woe:{...baseWoe,sap:official.sap,dia:official.dia,description:official.description||baseWoe.description,codeVerified:true},validation:'SAP/DIA validado',blocked:false};
+ if(baseWoe)return {woe:baseWoe,validation:'SAP/DIA sin doble validación',blocked:true};
+ if(micros?.ambiguous)return {woe:null,validation:'Nombre MICROS con más de un DIA',blocked:true};
+ if(micros&&byDia)return {woe:{micros:item.name,sap:byDia.sap,dia:byDia.dia,description:byDia.description,provider:micros.provider,microsUnit:'',ump:'',umb:null,relation:null,unit:'',compostable:null,codeVerified:true,codeOnly:true},validation:'Códigos validados · falta unidad WOE',blocked:false};
+ return {woe:null,validation:microsDia?'DIA sin correspondencia SAP':'Sin cruce WOE',blocked:true};
+}
 export function presentation(usage,stock,woe){
  const source=unitSpec(usage.unit),major=unitSpec(stock?.majorUnit||usage.unit),pick=unitSpec(stock?.pickPack),wu=unitSpec(woe?.unit);
  let stockPack=null,woePack=null;
@@ -68,7 +80,7 @@ export function inventory(d,f={},overrides={}){
  for(const item of items.values()){
   if(!(item.rawUse>0))continue;
   const byId=d.stockCatalog.get(item.id),stock=byId&&normalize(byId.name)===normalize(item.name)?byId:lookupName(d.stockCatalog,item.name);
-  const woe=d.woeCatalog.get(normalize(item.name)),p=presentation(item,stock,woe);
+  const codeCheck=resolveInventoryCodes(d,item,d.woeCatalog.get(normalize(item.name))),woe=codeCheck.woe,p=presentation(item,stock,woe);
   const families=Array.isArray(f.families)?f.families.filter(Boolean):[];
   if(f.family&&item.family!==f.family)continue;
   if(families.length&&!families.includes(item.family))continue;
@@ -83,6 +95,7 @@ export function inventory(d,f={},overrides={}){
   if(!woe)reasons.push('Sin cruce WOE');
   if(woe&&!woe.sap)reasons.push('Sin SAP');
   if(woe&&!p.woePack)reasons.push('Validar unidad WOE');
+  if(codeCheck.blocked&&!reasons.includes(codeCheck.validation))reasons.push(codeCheck.validation);
   if(rule!==undefined&&woe?.compostable!=null&&rule!==woe.compostable)reasons.push('Conflicto de clasificación');
   if(controlled&&policy===undefined)reasons.push('CeCo sin clasificación');
   if(controlled&&compostable==null)reasons.push('Artículo sin clasificación');
@@ -91,7 +104,7 @@ export function inventory(d,f={},overrides={}){
   const weekday=DAY_LABELS.map((name,i)=>{const ds=daily.filter(r=>dateParts(r.date).weekday===i);return {name,days:ds.length,average:ds.length?sum(ds,'value')/ds.length:null};});
   const weeks=[...new Set(dates.map(weekKey))].sort().map(week=>{const ds=daily.filter(r=>weekKey(r.date)===week);return {week,days:ds.length,average:sum(ds,'value')/ds.length};});
   const a=weeks.at(-1),b=weeks.at(-2);
-  rows.push({...item,stock,woe,p,sapName:woe?.description||stock?.name||item.name,microsName:woe?.micros||item.name,totalUse,average,minimum,maximum,orders,days,policy,compostable,daily,weekday,weeks,change:a&&b&&b.average>0?a.average/b.average-1:null,blocked:reasons.length>0,reason:reasons.join(' · '),adjusted:override!==null,unit:p.label});
+  rows.push({...item,stock,woe,p,codeValidation:codeCheck.validation,sapName:woe?.description||stock?.name||item.name,microsName:woe?.micros||item.name,totalUse,average,minimum,maximum,orders,days,policy,compostable,daily,weekday,weeks,change:a&&b&&b.average>0?a.average/b.average-1:null,blocked:reasons.length>0,reason:reasons.join(' · '),adjusted:override!==null,unit:p.label});
  }
  if(f.normalizedCups&&d.salesFacts.length&&dates.length){
   const normalized=normalizados(d,{store:f.store,from:dates[0],to:dates.at(-1),week:f.week,weekday:f.weekday});
@@ -99,7 +112,7 @@ export function inventory(d,f={},overrides={}){
   for(const item of rows){const cup=byName.get(normalize(item.name));if(!cup)continue;item.usageSource='Normalizados';item.reportedUse=item.totalUse;item.totalUse=cup.quantity;item.average=cup.quantity/days;if(!item.adjusted)item.minimum=item.average;item.maximum=item.minimum*ORDER_FACTOR[orders];}
  }
  rows.sort((a,b)=>a.name.localeCompare(b.name,'es'));
- return {items:rows,days,dates,orders,policy,from:dates[0]||'',to:dates.at(-1)||'',excluded:rows.filter(r=>r.blocked).length};
+ return {items:rows,days,dates,orders,policy,from:dates[0]||'',to:dates.at(-1)||'',excluded:rows.filter(r=>r.blocked).length,codeVerified:rows.filter(r=>r.woe?.codeVerified).length};
 }
 export function minmaxValues(item,mode='unit'){
  const pack=item.p.stockPack;
@@ -209,7 +222,7 @@ export function reportFor(module,result,context={}){
   const selected=new Set(context.selectedKeys||[]),items=selected.size?r.items.filter(i=>selected.has(i.key)):[];
   report.layout='labels';report.summary=[['Etiquetas seleccionadas',items.length],['Días observados',r.days],['Pedidos por semana',r.orders]];
   report.cards=items.map(i=>{const mode=context.modes?.[i.key]||context.mode,c=minmaxValues(i,mode);return {...c,name:context.nameMode==='micros'?i.microsName:i.sapName,sapName:i.sapName,microsName:i.microsName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',daily:i.average,mode,adjusted:i.adjusted};});
-  sheet('Lista Max Min',['Nombre SAP','Nombre MICROS','Código SAP','Código DIA','Familia','Uso diario','Mínimo','Máximo','Formato','Presentación'],items.map(i=>{const mode=context.modes?.[i.key]||context.mode,c=minmaxValues(i,mode);return [i.sapName,i.microsName,i.woe?.sap||'',i.woe?.dia||'',i.family,Number(i.average.toFixed(1)),c.minimum,c.maximum,mode==='pack'?'Pick Pack':'Unidad',c.unit];}));
+  sheet('Lista Max Min',['Nombre SAP','Nombre MICROS','Código SAP','Código DIA','Validación códigos','Familia','Uso diario','Mínimo','Máximo','Formato','Presentación'],items.map(i=>{const mode=context.modes?.[i.key]||context.mode,c=minmaxValues(i,mode);return [i.sapName,i.microsName,i.woe?.sap||'',i.woe?.dia||'',i.codeValidation||'',i.family,Number(i.average.toFixed(1)),c.minimum,c.maximum,mode==='pack'?'Pick Pack':'Unidad',c.unit];}));
  }
  if(module==='trend'){report.summary=[['Productos',r.items.length],['Días observados',r.days]];sheet('Uso por día',['Producto','Unidad','Uso total','Promedio diario',...DAY_LABELS],r.items.map(i=>[i.name,i.unit,i.totalUse,i.average,...i.weekday.map(x=>x.average)]));}
  if(module==='order'){report.summary=[['Días observados',r.days],['Artículos bloqueados',r.excluded]];const ready=(context.orders||[]).filter(x=>!x.blocked&&x.quantity>0);sheet('Pedido',['Producto','SAP','DIA','Proveedor','Unidad WOE','Cantidad','Existencia','Tránsito','Cobertura hasta'],ready.map(x=>[x.item.name,x.item.woe.sap,x.item.woe.dia,x.item.woe.provider,x.item.woe.ump,x.quantity,x.stock,x.transit,x.end]));sheet('Base del pedido',['Producto','Base de uso','Unidad de captura','Uso diario','Días de cobertura','Demanda','Faltante'],ready.map(x=>[x.item.name,x.item.usageSource||'Uso ideal _ac',x.item.unit,x.item.minimum,x.coverage,x.demand,x.missing]));}

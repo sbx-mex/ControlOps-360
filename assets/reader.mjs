@@ -145,12 +145,21 @@ function structuralTypes(headers) {
   return types;
 }
 
-async function tableCandidates(zip, sheets) {
+async function looseCatalogCandidate(zip,sheet,strings){
+  if(normalize(sheet.name)!=="catalogomicros")return null;
+  const xml=parseXml(await zip.text(sheet.path),sheet.path),first=[...xml.getElementsByTagName("row")].find(row=>Number(row.getAttribute("r")||0)===1);
+  if(!first)return null;const cells=[...first.getElementsByTagName("c")],width=Math.max(0,...cells.map(cell=>columnIndex(cell.getAttribute("r"))+1)),headers=Array(width).fill("");
+  for(const cell of cells)headers[columnIndex(cell.getAttribute("r"))]=cellText(cell,strings);
+  const roles=structuralTypes(headers).filter(type=>Object.hasOwn(CATALOG_FIELDS,type));if(!roles.includes("microsList"))return null;
+  const ref=xml.getElementsByTagName("dimension")[0]?.getAttribute("ref")||`A1:${String.fromCharCode(64+Math.min(width,26))}${xml.getElementsByTagName("row").length}`;
+  return {sheetName:sheet.name,sheetPath:sheet.path,sourceName:sheet.name,ref,headers,roles:["microsList"]};
+}
+
+async function tableCandidates(zip, sheets, strings) {
   const bySheet = await Promise.all(sheets.map(async (sheet) => {
     const candidates = [];
     const relPath = relationPath(sheet.path);
-    if (!zip.has(relPath)) return candidates;
-    const rels = relationships(parseXml(await zip.text(relPath), relPath));
+    const rels = zip.has(relPath)?relationships(parseXml(await zip.text(relPath), relPath)):new Map();
     const tables = await Promise.all([...rels.values()].map(async (target) => {
       const tablePath = resolvePath(sheet.path, target);
       if (!/^xl\/tables\/[^/]+\.xml$/i.test(tablePath) || !zip.has(tablePath)) return null;
@@ -171,7 +180,7 @@ async function tableCandidates(zip, sheets) {
         roles,
       } : null;
     }));
-    candidates.push(...tables.filter(Boolean));
+    candidates.push(...tables.filter(Boolean));const loose=await looseCatalogCandidate(zip,sheet,strings);if(loose&&!candidates.some(candidate=>candidate.roles.includes("microsList")))candidates.push(loose);
     return candidates;
   }));
   return bySheet.flat();
@@ -217,8 +226,8 @@ export async function inspectWorkbook(file, progress=()=>{}) {
  const buffer=await file.arrayBuffer(),fingerprintPromise=sha256(buffer),zip=new ZipWorkbook(buffer);
  if(!zip.has("xl/workbook.xml")||!zip.has("xl/_rels/workbook.xml.rels")||(macro&&!zip.has("xl/vbaProject.bin")))throw new Error("El libro no es válido.");
  const [sheets,strings,fingerprint]=await Promise.all([workbookSheets(zip),sharedStrings(zip),fingerprintPromise]);
- const candidates=await tableCandidates(zip,sheets);
- const allowed=macro?[...FACT_TYPES,...Object.keys(CATALOG_FIELDS)]:["woe","baking","storePolicy","compostable","food","drink","cream"];
+ const candidates=await tableCandidates(zip,sheets,strings);
+ const allowed=macro?[...FACT_TYPES,...Object.keys(CATALOG_FIELDS)]:["woe","sapList","microsList","baking","storePolicy","compostable","food","drink","cream"];
  if(!candidates.some(c=>c.roles.some(r=>macro?FACT_TYPES.includes(r):allowed.includes(r))))throw new Error(parameter ? "El XLSX no es un parámetro compatible." : "No contiene tablas _ac compatibles.");
  const local=createDataset(),sources=[];
  for(const candidate of candidates){
