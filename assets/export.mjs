@@ -119,9 +119,26 @@ export function createExecutiveWorkbook(summary, usage, context = {}) {
     { name: "Productos", rows: [["ID", "Producto", "Familia", "Unidades", "Venta"], ...summary.topProducts.map((row) => [row.id, row.name, row.family || row.category, row.units, row.sales])] },
     { name: "Canales", rows: [["Canal", "Órdenes", "Unidades", "Venta", "% venta"], ...summary.modes.map((row) => [row.name, row.orders, row.units, row.sales, row.share])] },
   ];
+  if (context.cups?.quantity) sheets[0].rows.push(["Bebida Alta Caliente", context.cups.quantity], ["Vaso aplicable", context.cups.targetName]);
+  if (context.audit?.hasData) sheets.push({ name: "Auditoría", rows: [
+    ["Indicador", "Resultado"],
+    ["Tickets negativos", context.audit.negativeCount], ["Importe negativo", context.audit.negativeTotal],
+    ["Tickets con void", context.audit.voidCount], ["Importe void", context.audit.voidTotal],
+    ["Pagos leídos", context.audit.paymentCount], ["Importe pagos", context.audit.paymentTotal],
+    ["Riesgo principal", context.audit.topReason.name], ["Forma de pago principal", context.audit.topPayment.name],
+  ] });
   if (usage.items.length) sheets.push({ name: "Uso acumulado", rows: [
-    ["Artículo", "Nombre", "Familia", "Tipo", `Uso ${usage.days} días`, "Uso mínimo diario", "Máximo", "Unidad pedido", "Máx. a pedir"],
-    ...usage.items.map((row) => [row.id, row.name, row.family, row.compostable === true ? "Compostable" : row.compostable === false ? "No compostable" : "Sin clasificar", row.totalUse, row.minimum, row.maximum, row.orderUnit, row.maxOrderUnits]),
+    ["Artículo", "Nombre", "SAP", "DIA", "Aplica", `Uso ${usage.days} días`, "Uso mínimo diario", "Máximo", "Unidad pedido", "Máx. pedido"],
+    ...usage.items.map((row) => [row.id, row.name, row.sap, row.dia, row.blocked ? "Definir tienda" : row.applicable ? "Sí" : "No", row.totalUse, row.minimum, row.maximum, row.orderUnit, row.maxOrderUnits]),
+  ] });
+  const orderRows = (usage.items || []).filter((row) => row.applicable && !row.blocked && Number(context.orderDraft?.[`${row.store}|${row.id}`]) > 0);
+  if (orderRows.length) sheets.push({ name: "Pedido", rows: [
+    ["Artículo", "Nombre", "SAP", "DIA", "Unidad", "Cantidad"],
+    ...orderRows.map((row) => [row.id, row.name, row.sap, row.dia, row.orderUnit, Number(context.orderDraft[`${row.store}|${row.id}`])]),
+  ] });
+  if (context.baking?.items?.length) sheets.push({ name: "Horneo", rows: [
+    ["Grupo", "Producto", "Descongelación", "Horneo", "Temperatura", "Máximo por charola", "Compatible"],
+    ...context.baking.items.map((row) => [row.group, row.product, row.thaw, row.bake, row.temperature, row.maxTray ?? "", row.together]),
   ] });
   const used = new Set();
   sheets.forEach((sheet) => { sheet.name = safeSheetName(sheet.name, used); });
@@ -157,34 +174,40 @@ export function createExecutivePdf(summary, usage, context = {}) {
   rect(0, 550, 792, 62, "0 0.30 0.20");
   text(34, 580, 19, "RESUMEN EJECUTIVO", true, "1 1 1");
   text(34, 561, 9, `${context.storeLabel || "Todas las tiendas"}  ·  ${summary.dateFrom || "—"} a ${summary.dateTo || "—"}`, false, "0.82 0.93 0.88");
-  const metrics = [["VENTA NETA", MONEY.format(summary.sales)], ["ÓRDENES", NUMBER.format(summary.orders)], ["TICKET PROM.", MONEY.format(summary.averageTicket)], ["UPT", NUMBER.format(summary.upt)]];
+  const metrics = summary.orders
+    ? [["VENTA NETA", MONEY.format(summary.sales)], ["ÓRDENES", NUMBER.format(summary.orders)], ["TICKET PROM.", MONEY.format(summary.averageTicket)], ["UPT", NUMBER.format(summary.upt)]]
+    : context.audit?.hasData
+      ? [["NEGATIVOS", NUMBER.format(context.audit.negativeCount)], ["VOIDS", NUMBER.format(context.audit.voidCount)], ["PAGOS", NUMBER.format(context.audit.paymentCount)], ["IMPORTE VOID", MONEY.format(context.audit.voidTotal)]]
+      : [["DÍAS DE USO", NUMBER.format(usage.days)], ["ARTÍCULOS", NUMBER.format(usage.items.length)], ["MAPEADOS WOE", NUMBER.format(usage.mapped || 0)], ["NO APLICAN", NUMBER.format(usage.excluded || 0)]];
   metrics.forEach(([label, value], index) => {
     const x = 34 + index * 184;
     rect(x, 475, 168, 58, "0.94 0.97 0.95");
     text(x + 12, 513, 8, label, true, "0.25 0.38 0.32");
     text(x + 12, 487, 17, value, true);
   });
-  text(34, 445, 12, "PEAK HOUR · 4 MEDIAS HORAS CONSECUTIVAS", true);
-  rect(34, 393, 352, 40, "0.90 0.95 0.92");
-  text(48, 417, 9, "AM 05:00–15:00", true); text(190, 417, 12, summary.am.label, true); text(290, 417, 9, `${NUMBER.format(summary.am.average)} órdenes/día`);
-  rect(406, 393, 352, 40, "0.90 0.95 0.92");
-  text(420, 417, 9, "PM 15:00–23:00", true); text(562, 417, 12, summary.pm.label, true); text(662, 417, 9, `${NUMBER.format(summary.pm.average)} órdenes/día`);
-  text(34, 362, 11, "ENFOQUE GERENTE", true);
-  (summary.focus.length ? summary.focus : ["Sin datos en el filtro."]).slice(0, 3).forEach((item, index) => text(48, 342 - index * 17, 9, `• ${trim(item, 112)}`));
-  text(34, 278, 11, "PEAK POR DÍA", true);
-  text(406, 278, 11, "PRODUCTOS QUE MUEVEN LA VENTA", true);
-  text(34, 258, 8, "DÍA", true); text(95, 258, 8, "AM", true); text(190, 258, 8, "PM", true); text(290, 258, 8, "ÓRD./DÍA", true);
-  summary.peakByWeekday.forEach((row, index) => {
-    const y = 240 - index * 21;
-    if (index % 2 === 0) rect(34, y - 6, 352, 19, "0.97 0.98 0.97");
-    text(40, y, 8, row.day, true); text(95, y, 8, row.am.label); text(190, y, 8, row.pm.label); text(290, y, 8, NUMBER.format(Math.max(row.am.average, row.pm.average)));
-  });
-  text(406, 258, 8, "PRODUCTO", true); text(672, 258, 8, "VENTA", true);
-  summary.topProducts.slice(0, 7).forEach((row, index) => {
-    const y = 240 - index * 21;
-    if (index % 2 === 0) rect(406, y - 6, 352, 19, "0.97 0.98 0.97");
-    text(412, y, 8, trim(row.name, 39)); text(672, y, 8, MONEY.format(row.sales), true);
-  });
+  if (summary.orders) {
+    text(34, 445, 12, "PEAK HOUR · 4 MEDIAS HORAS CONSECUTIVAS", true);
+    rect(34, 393, 352, 40, "0.90 0.95 0.92");
+    text(48, 417, 9, "AM 05:00–15:00", true); text(190, 417, 12, summary.am.label, true); text(290, 417, 9, `${NUMBER.format(summary.am.average)} órdenes/día`);
+    rect(406, 393, 352, 40, "0.90 0.95 0.92");
+    text(420, 417, 9, "PM 15:00–23:00", true); text(562, 417, 12, summary.pm.label, true); text(662, 417, 9, `${NUMBER.format(summary.pm.average)} órdenes/día`);
+    text(34, 362, 11, "ENFOQUE GERENTE", true);
+    summary.focus.slice(0, 3).forEach((item, index) => text(48, 342 - index * 17, 9, `• ${trim(item, 112)}`));
+    text(34, 278, 11, "PEAK POR DÍA", true); text(406, 278, 11, "PRODUCTOS QUE MUEVEN LA VENTA", true);
+    summary.peakByWeekday.forEach((row, index) => { const y = 250 - index * 21; text(40, y, 8, `${row.day}  ${row.am.label}  /  ${row.pm.label}`); });
+    summary.topProducts.slice(0, 7).forEach((row, index) => text(412, 250 - index * 21, 8, `${trim(row.name, 34)}  ${MONEY.format(row.sales)}`));
+  } else if (context.audit?.hasData) {
+    text(34, 445, 12, "AUDITORÍA", true);
+    text(48, 416, 10, `Riesgo principal: ${trim(context.audit.topReason.name, 70)}`, true);
+    text(48, 390, 10, `Forma de pago principal: ${trim(context.audit.topPayment.name, 56)} · ${MONEY.format(context.audit.topPayment.amount)}`);
+    text(48, 364, 10, `Importe negativo: ${MONEY.format(context.audit.negativeTotal)} · Importe void: ${MONEY.format(context.audit.voidTotal)}`);
+  } else if (usage.items.length) {
+    text(34, 445, 12, "PEDIDO · ARTÍCULOS DE MAYOR USO", true);
+    usage.items.filter((row) => row.applicable && !row.blocked).slice(0, 10).forEach((row, index) => text(48, 416 - index * 25, 9, `${trim(row.name, 52)} · mín ${NUMBER.format(row.minimum)} · máx ${NUMBER.format(row.maxOrderUnits)} ${row.orderUnit}`));
+  } else if (context.baking?.items?.length) {
+    text(34, 445, 12, "PARÁMETROS DE HORNEO", true);
+    context.baking.items.slice(0, 10).forEach((row, index) => text(48, 416 - index * 25, 9, `${trim(row.product, 45)} · ${trim(row.bake, 30)} · ${trim(row.temperature, 18)}`));
+  }
   if (usage.items.length) {
     text(34, 78, 10, `USO ${usage.days} DÍAS · ${usage.orders} PEDIDOS`, true);
     usage.items.slice(0, 4).forEach((row, index) => text(220 + index * 140, 78, 8, `${trim(row.name, 18)}  MÍN ${NUMBER.format(row.minimum)} · MÁX ${NUMBER.format(row.maximum)}`));

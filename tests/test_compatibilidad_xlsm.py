@@ -94,6 +94,24 @@ class CompatibilityTests(unittest.TestCase):
             self.assertEqual(len(files), 2)
             self.assertTrue(all(MOD.inspect_xlsm(path).compatible for path in files))
 
+    def test_xlsx_is_accepted_only_as_known_parameter(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            good = root / "catalogo (2).xlsx"
+            make_xlsm(good, [("Tabla", "Tabla", list(MOD.STRUCTURES["woe"]))], macros=False)
+            self.assertTrue(MOD.inspect_workbook(good).compatible)
+            bad = root / "base.xlsx"
+            make_xlsm(bad, [("Datos", "Datos", ["ID", "Nombre"])], macros=False)
+            self.assertFalse(MOD.inspect_workbook(bad).compatible)
+
+    def test_auditoria_ac_works_without_sales(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "Auditoria copia.xlsm"
+            make_xlsm(path, [("void_ac", "Tabla12", list(MOD.STRUCTURES["auditoria_void"]))])
+            result = MOD.inspect_xlsm(path)
+            self.assertTrue(result.compatible)
+            self.assertIn("auditoria_void", result.kinds)
+
 
 if __name__ == "__main__":
     unittest.main()

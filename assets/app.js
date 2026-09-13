@@ -1,7 +1,7 @@
 "use strict";
 
 import {
-  addReferenceRows, addRows, addUsageRows, buildExecutiveSummary, buildUsageSummary,
+  addAuditRows, addReferenceRows, addRows, addUsageRows, buildAuditSummary, buildBakingSummary, buildCupSummary, buildExecutiveSummary, buildUsageSummary,
   classifyStructure, createDataset, getFilterOptions, isAcSource, mergeDataset, normalize,
 } from "./engine.mjs";
 import { createExecutivePdf, createExecutiveWorkbook, downloadBytes } from "./export.mjs";
@@ -10,6 +10,8 @@ const MAX_FILE_BYTES = 100 * 1024 * 1024;
 const MAX_ENTRY_BYTES = 220 * 1024 * 1024;
 const MAX_TOTAL_UNCOMPRESSED = 700 * 1024 * 1024;
 const OVERRIDE_KEY = "controlops360-minimos-v3";
+const STORE_TYPE_KEY = "controlops360-tipo-tienda-v4";
+const ORDER_KEY = "controlops360-pedido-v4";
 
 const state = {
   dataset: createDataset(),
@@ -19,15 +21,23 @@ const state = {
   initializedFilters: false,
   summary: null,
   usage: null,
+  audit: null,
+  baking: null,
+  cups: null,
   overrides: loadOverrides(),
+  storeTypes: loadJson(STORE_TYPE_KEY),
+  orderDraft: loadJson(ORDER_KEY),
+  activeModule: "menu",
 };
 
 const ids = [
-  "fileInput", "uploadButton", "resetButton", "excelButton", "pdfButton", "dropZone", "emptyState", "dashboard",
+  "fileInput", "uploadButton", "resetButton", "excelButton", "pdfButton", "dropZone", "emptyState", "dashboard", "moduleNav", "menuModule", "filterPanel", "activeModuleTitle",
   "progressText", "storeFilter", "dateFrom", "dateTo", "weekdayFilter", "modeFilter", "productFilter", "clearFilters",
   "storeTitle", "periodTitle", "sourceSummary", "fileList", "salesMetric", "ordersMetric", "ticketMetric", "uptMetric",
   "peakAmTime", "peakAmOrders", "peakPmTime", "peakPmOrders", "focusList", "peakTable", "productTable", "productCount",
-  "channelBars", "inventoryPanel", "usagePeriod", "usageTotalHeader", "ordersFilter", "compostableFilter", "usageFilter", "usageTable", "toast",
+  "channelBars", "salesModule", "auditModule", "auditNegative", "auditNegativeAmount", "auditVoids", "auditVoidAmount", "auditPayments", "auditPaymentAmount", "auditReason", "auditPaymentMode",
+  "inventoryPanel", "usagePeriod", "usageTotalHeader", "ordersFilter", "compostableFilter", "usageFilter", "usageTable", "storeType", "storeTypeStatus", "orderCount", "orderTotal",
+  "cupPanel", "cupQuantity", "cupTarget", "cupStatus", "bakingModule", "bakingFilter", "bakingCount", "bakingTable", "aboutModule", "toast",
 ];
 const elements = Object.fromEntries(ids.map((id) => [id, document.getElementById(id)]));
 const MONEY = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 });
@@ -35,6 +45,10 @@ const NUMBER = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 1 });
 
 function loadOverrides() {
   try { return JSON.parse(localStorage.getItem(OVERRIDE_KEY) || "{}"); } catch (_) { return {}; }
+}
+
+function loadJson(key) {
+  try { return JSON.parse(localStorage.getItem(key) || "{}"); } catch (_) { return {}; }
 }
 
 function escapeHtml(value) {
@@ -177,6 +191,7 @@ function structuralTypes(headers) {
   const types = classifyStructure(headers);
   const available = new Set(headers.map(normalize));
   if (available.has("idtienda") && ["tienda", "nombretienda", "stname"].some((item) => available.has(item)) && !types.includes("store")) types.push("store");
+  if (["idtienda", "ceco", "cc"].some((item) => available.has(item)) && available.has("compostable")) types.push("storePolicy");
   return types;
 }
 
@@ -194,8 +209,8 @@ async function tableCandidates(zip, sheets) {
       const headers = [...xml.getElementsByTagName("tableColumn")].map((node) => node.getAttribute("name") || "");
       const types = structuralTypes(headers);
       const roles = types.filter((type) => {
-        if (["sales", "usage"].includes(type)) return isAcSource(sheet.name);
-        return ["product", "store", "stock", "compostable"].includes(type);
+        if (["sales", "usage", "auditTicket", "auditVoid", "auditPayment"].includes(type)) return isAcSource(sheet.name);
+        return ["product", "store", "stock", "compostable", "woe", "baking", "storePolicy"].includes(type);
       });
       if (roles.length) candidates.push({
         sheetName: sheet.name,
@@ -242,41 +257,62 @@ async function rowsFromTable(zip, candidate, strings, onBatch) {
   return processed;
 }
 
-const ROLE_LABEL = { sales: "Venta", usage: "Uso 21 días", product: "Productos", store: "CeCo", stock: "Presentaciones", compostable: "Compostable" };
+const ROLE_LABEL = { sales: "Normalizados", usage: "Max & Min", auditTicket: "Auditoría", auditVoid: "Voids", auditPayment: "Pagos", product: "Productos", store: "CeCo", stock: "Presentaciones", compostable: "Compostable", woe: "WOE", baking: "Horneo", storePolicy: "Aplicabilidad" };
 
-async function inspectXlsm(file) {
-  if (!/\.xlsm$/i.test(file.name)) throw new Error("Solo se aceptan archivos .xlsm.");
+function operationalStores(dataset) {
+  return new Set([...dataset.salesFacts, ...dataset.usageFacts, ...dataset.auditTickets, ...dataset.auditVoids, ...dataset.auditPayments].map((fact) => fact.store));
+}
+
+function validateCeCo(local) {
+  const incoming = operationalStores(local);
+  const current = operationalStores(state.dataset);
+  if (incoming.size > 1) throw new Error("El archivo contiene más de un CeCo.");
+  if (current.size && incoming.size && [...incoming][0] !== [...current][0]) throw new Error(`CeCo ${[...incoming][0]} no coincide con ${[...current][0]}.`);
+  if (incoming.size && local.storeCatalog.size && !local.storeCatalog.has([...incoming][0])) throw new Error("El CeCo de datos no coincide con la tabla Tienda.");
+}
+
+async function inspectWorkbook(file) {
+  const macro = /\.xlsm$/i.test(file.name);
+  const parameter = /\.xlsx$/i.test(file.name);
+  if (!macro && !parameter) throw new Error("Usa XLSM o un parámetro XLSX.");
   if (file.size > MAX_FILE_BYTES) throw new Error("El archivo supera 100 MB.");
   const buffer = await file.arrayBuffer();
   const fingerprint = await sha256(buffer);
   if (state.fingerprints.has(fingerprint)) throw new Error("Archivo repetido, aunque tenga otro nombre.");
   const zip = new ZipWorkbook(buffer);
-  if (!zip.has("xl/workbook.xml") || !zip.has("xl/_rels/workbook.xml.rels") || !zip.has("xl/vbaProject.bin")) throw new Error("No es un XLSM válido.");
+  if (!zip.has("xl/workbook.xml") || !zip.has("xl/_rels/workbook.xml.rels") || (macro && !zip.has("xl/vbaProject.bin"))) throw new Error("El libro no es válido.");
   const candidates = await tableCandidates(zip, await workbookSheets(zip));
-  const useful = candidates.some((candidate) => candidate.roles.some((role) => ["sales", "usage", "compostable"].includes(role)));
-  if (!useful) throw new Error("No contiene un motor _ac ni clasificación compatible.");
+  const allowed = macro ? ["sales", "usage", "auditTicket", "auditVoid", "auditPayment", "product", "store", "stock", "compostable", "woe", "baking", "storePolicy"] : ["woe", "baking", "storePolicy", "compostable"];
+  const useful = candidates.some((candidate) => candidate.roles.some((role) => allowed.includes(role)));
+  if (!useful) throw new Error(parameter ? "El XLSX no es un parámetro compatible." : "No contiene tablas _ac compatibles.");
   const strings = await sharedStrings(zip);
   const local = createDataset();
   const sources = [];
   for (const candidate of candidates) {
     const counts = Object.fromEntries(candidate.roles.map((role) => [role, 0]));
     const rows = await rowsFromTable(zip, candidate, strings, (batch) => {
-      for (const role of candidate.roles) {
+      for (const role of candidate.roles.filter((item) => allowed.includes(item))) {
         if (role === "sales") counts[role] += addRows(local, candidate.headers, batch, { fileName: file.name, sourceName: candidate.sourceName }).uniqueRows;
         else if (role === "usage") counts[role] += addUsageRows(local, candidate.headers, batch, { fileName: file.name, sourceName: candidate.sourceName });
+        else if (["auditTicket", "auditVoid", "auditPayment"].includes(role)) counts[role] += addAuditRows(local, role, candidate.headers, batch, { fileName: file.name, sourceName: candidate.sourceName });
         else counts[role] += addReferenceRows(local, role, candidate.headers, batch);
       }
     });
     sources.push({ name: candidate.sourceName, sheet: candidate.sheetName, roles: candidate.roles, rows, counts });
   }
+  validateCeCo(local);
   const merged = mergeDataset(state.dataset, local);
   state.fingerprints.add(fingerprint);
   return { name: file.name, compatible: true, sources, fingerprint: fingerprint.slice(0, 12), ...merged };
 }
 
 function currentFilters() {
+  const store = elements.storeFilter.value;
+  const policy = state.dataset.storePolicies.get(store);
+  const saved = state.storeTypes[store];
+  const storeType = policy ?? (saved === true || saved === false ? saved : elements.storeType.value === "yes" ? true : elements.storeType.value === "no" ? false : null);
   return {
-    store: elements.storeFilter.value,
+    store,
     from: elements.dateFrom.value,
     to: elements.dateTo.value,
     weekday: elements.weekdayFilter.value,
@@ -285,6 +321,7 @@ function currentFilters() {
     orders: elements.ordersFilter.value,
     compostable: elements.compostableFilter.value,
     usageQuery: elements.usageFilter.value,
+    storeType,
   };
 }
 
@@ -304,6 +341,11 @@ function initializeFilters() {
     elements.dateTo.value = options.maxDate;
     state.initializedFilters = true;
   }
+  const store = elements.storeFilter.value;
+  const policy = state.dataset.storePolicies.get(store);
+  const saved = state.storeTypes[store];
+  elements.storeType.value = (policy ?? saved) === true ? "yes" : (policy ?? saved) === false ? "no" : "";
+  elements.storeType.disabled = policy === true || policy === false;
 }
 
 function storeLabel() {
@@ -343,15 +385,65 @@ function typeChip(value) {
 }
 
 function renderUsage(usage) {
-  elements.inventoryPanel.hidden = !state.dataset.usageFacts.length;
   if (!state.dataset.usageFacts.length) return;
   elements.usagePeriod.textContent = `${usage.dateFrom || "—"} a ${usage.dateTo || "—"} · ${usage.days} días · factor ×${usage.factor || "—"}`;
   elements.usageTotalHeader.textContent = `Uso ${usage.days} días`;
-  elements.usageTable.innerHTML = usage.items.slice(0, 150).map((row) => `<tr><td><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.id)} · ${escapeHtml(row.family)}</small></td><td>${typeChip(row.compostable)}</td><td class="number">${NUMBER.format(row.totalUse)}</td><td><input class="minimum-input" inputmode="decimal" aria-label="Uso mínimo diario de ${escapeHtml(row.name)}" data-key="${escapeHtml(`${row.store}|${row.id}`)}" value="${Number(row.minimum.toFixed(2))}"></td><td class="number"><strong>${NUMBER.format(row.maximum)}</strong></td><td>${escapeHtml(row.orderUnit)}<small>${NUMBER.format(row.pack)} por pedido</small></td><td class="number"><strong>${NUMBER.format(row.maxOrderUnits)}</strong></td></tr>`).join("") || '<tr><td colspan="7">Sin artículos en el filtro.</td></tr>';
+  elements.storeTypeStatus.textContent = usage.policy === true ? "CeCo compostable" : usage.policy === false ? "CeCo no compostable" : "Define tipo para vasos y tapas";
+  const store = elements.storeFilter.value;
+  const selected = usage.items.filter((row) => Number(state.orderDraft[`${store}|${row.id}`]) > 0 && row.applicable && !row.blocked);
+  elements.orderCount.textContent = NUMBER.format(selected.length);
+  elements.orderTotal.textContent = NUMBER.format(selected.reduce((sum, row) => sum + Number(state.orderDraft[`${store}|${row.id}`]), 0));
+  elements.usageTable.innerHTML = usage.items.slice(0, 180).map((row) => {
+    const key = `${row.store}|${row.id}`;
+    const status = row.blocked ? `<span class="type-chip blocked">${escapeHtml(row.blockedReason)}</span>` : row.applicable ? '<span class="type-chip yes">Sí</span>' : '<span class="type-chip blocked">No</span>';
+    const value = Number(state.orderDraft[key]) || 0;
+    return `<tr class="${row.applicable && !row.blocked ? "" : "row-disabled"}"><td><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.id)}${row.sap ? ` · SAP ${escapeHtml(row.sap)}` : ""}${row.dia ? ` · DIA ${escapeHtml(row.dia)}` : ""}</small></td><td>${status}</td><td class="number">${NUMBER.format(row.totalUse)}</td><td><input class="minimum-input" inputmode="decimal" aria-label="Uso mínimo diario de ${escapeHtml(row.name)}" data-key="${escapeHtml(key)}" value="${Number(row.minimum.toFixed(2))}"></td><td class="number"><strong>${NUMBER.format(row.maximum)}</strong></td><td>${escapeHtml(row.orderUnit)}<small>${NUMBER.format(row.pack)} por pedido · máx. ${NUMBER.format(row.maxOrderUnits)}</small></td><td><input class="order-input" inputmode="numeric" aria-label="Pedido de ${escapeHtml(row.name)}" data-key="${escapeHtml(key)}" data-max="${row.maxOrderUnits}" value="${value}" ${row.applicable && !row.blocked ? "" : "disabled"}></td></tr>`;
+  }).join("") || '<tr><td colspan="7">Sin artículos en el filtro.</td></tr>';
+}
+
+function renderAudit(audit) {
+  elements.auditNegative.textContent = NUMBER.format(audit.negativeCount);
+  elements.auditNegativeAmount.textContent = MONEY.format(audit.negativeTotal);
+  elements.auditVoids.textContent = NUMBER.format(audit.voidCount);
+  elements.auditVoidAmount.textContent = MONEY.format(audit.voidTotal);
+  elements.auditPayments.textContent = NUMBER.format(audit.paymentCount);
+  elements.auditPaymentAmount.textContent = MONEY.format(audit.paymentTotal);
+  elements.auditReason.textContent = audit.topReason.name;
+  elements.auditPaymentMode.textContent = `${audit.topPayment.name} · ${MONEY.format(audit.topPayment.amount)}`;
+}
+
+function renderCups(cups) {
+  elements.cupPanel.hidden = !state.dataset.salesFacts.length;
+  elements.cupQuantity.textContent = `${NUMBER.format(cups.quantity)} bebidas`;
+  elements.cupTarget.textContent = cups.targetName;
+  elements.cupStatus.textContent = cups.ready ? `${NUMBER.format(cups.quantity)} vasos · ${cups.target?.dia ? `DIA ${cups.target.dia}` : `SAP ${cups.target?.sap || "—"}`}` : "Carga WOE y define el tipo de tienda";
+}
+
+function renderBaking(baking) {
+  elements.bakingCount.textContent = `${NUMBER.format(baking.count)} productos`;
+  elements.bakingTable.innerHTML = baking.items.slice(0, 200).map((row) => `<tr><td><strong>${escapeHtml(row.product)}</strong><small>${escapeHtml(row.group)}</small></td><td>${escapeHtml(row.thaw || "—")}</td><td>${escapeHtml(row.bake || "—")}</td><td>${escapeHtml(row.temperature || "—")}</td><td class="number">${row.maxTray == null ? "—" : NUMBER.format(row.maxTray)}</td><td>${escapeHtml(row.together || "—")}</td></tr>`).join("") || '<tr><td colspan="6">Sin coincidencias.</td></tr>';
+}
+
+function renderModules() {
+  const available = {
+    sales: Boolean(state.dataset.salesFacts.length),
+    audit: Boolean(state.dataset.auditTickets.length || state.dataset.auditVoids.length || state.dataset.auditPayments.length),
+    order: Boolean(state.dataset.usageFacts.length),
+    baking: Boolean(state.dataset.bakingCatalog.size),
+    about: true,
+  };
+  if (state.activeModule !== "menu" && !available[state.activeModule]) state.activeModule = "menu";
+  for (const button of elements.menuModule.querySelectorAll("button[data-open-module]")) button.hidden = !available[button.dataset.openModule];
+  for (const view of document.querySelectorAll("[data-view]")) view.hidden = view.dataset.view !== state.activeModule;
+  const titles = { sales: "Peak Hour", audit: "Auditoría", order: "Pedido", baking: "Horneo", about: "Acerca de" };
+  elements.moduleNav.hidden = state.activeModule === "menu";
+  elements.activeModuleTitle.textContent = titles[state.activeModule] || "Análisis";
+  elements.filterPanel.hidden = !["sales", "audit"].includes(state.activeModule);
+  for (const field of elements.filterPanel.querySelectorAll(".sales-only")) field.hidden = state.activeModule !== "sales";
 }
 
 function render() {
-  const hasData = state.dataset.salesFacts.length || state.dataset.usageFacts.length;
+  const hasData = state.dataset.salesFacts.length || state.dataset.usageFacts.length || state.dataset.auditTickets.length || state.dataset.auditVoids.length || state.dataset.auditPayments.length || state.dataset.bakingCatalog.size;
   const hasFiles = state.files.length > 0;
   elements.emptyState.hidden = hasFiles;
   elements.dashboard.hidden = !hasFiles;
@@ -362,8 +454,14 @@ function render() {
   const filters = currentFilters();
   const summary = buildExecutiveSummary(state.dataset, filters);
   const usage = buildUsageSummary(state.dataset, filters, state.overrides);
+  const audit = buildAuditSummary(state.dataset, filters);
+  const baking = buildBakingSummary(state.dataset, elements.bakingFilter.value);
+  const cups = buildCupSummary(state.dataset, summary, filters);
   state.summary = summary;
   state.usage = usage;
+  state.audit = audit;
+  state.baking = baking;
+  state.cups = cups;
   elements.storeTitle.textContent = storeLabel();
   elements.periodTitle.textContent = summary.dateFrom ? `${summary.dateFrom} a ${summary.dateTo}` : "Sin venta en el filtro";
   elements.salesMetric.textContent = MONEY.format(summary.sales);
@@ -376,6 +474,10 @@ function render() {
   renderProducts(summary);
   renderChannels(summary);
   renderUsage(usage);
+  renderAudit(audit);
+  renderCups(cups);
+  renderBaking(baking);
+  renderModules();
 }
 
 function reset() {
@@ -385,9 +487,14 @@ function reset() {
   state.initializedFilters = false;
   state.summary = null;
   state.usage = null;
+  state.audit = null;
+  state.baking = null;
+  state.cups = null;
+  state.activeModule = "menu";
   elements.fileInput.value = "";
   elements.productFilter.value = "";
   elements.usageFilter.value = "";
+  elements.bakingFilter.value = "";
   setProgress();
   render();
 }
@@ -416,7 +523,7 @@ async function handleFiles(fileList) {
     const file = files[index];
     setProgress(`${index + 1} de ${files.length} · ${file.name}`);
     try {
-      state.files.push(await inspectXlsm(file));
+      state.files.push(await inspectWorkbook(file));
       compatible += 1;
     } catch (error) {
       state.files.push({ name: file.name, compatible: false, error: error.message || "No fue posible leer el archivo." });
@@ -425,14 +532,14 @@ async function handleFiles(fileList) {
   }
   state.loading = false;
   elements.uploadButton.disabled = false;
-  elements.uploadButton.textContent = "Cargar XLSM";
+  elements.uploadButton.textContent = "Cargar archivos";
   elements.fileInput.value = "";
   setProgress();
   render();
   showToast(`${compatible} archivo${compatible === 1 ? "" : "s"} listo${compatible === 1 ? "" : "s"}.`);
 }
 
-function exportContext() { return { storeLabel: storeLabel() }; }
+function exportContext() { return { storeLabel: storeLabel(), audit: state.audit, baking: state.baking, cups: state.cups, orderDraft: state.orderDraft }; }
 
 function safeFilename(extension) {
   const store = (elements.storeFilter.value || "Consolidado").replace(/[^a-zA-Z0-9_-]+/g, "-");
@@ -463,17 +570,44 @@ elements.pdfButton.addEventListener("click", exportPdf);
 for (const element of [elements.storeFilter, elements.dateFrom, elements.dateTo, elements.weekdayFilter, elements.modeFilter, elements.ordersFilter, elements.compostableFilter]) {
   element.addEventListener("change", render);
 }
-for (const element of [elements.productFilter, elements.usageFilter]) {
+for (const element of [elements.productFilter, elements.usageFilter, elements.bakingFilter]) {
   element.addEventListener("input", () => { window.clearTimeout(element.renderTimer); element.renderTimer = window.setTimeout(render, 120); });
 }
 elements.usageTable.addEventListener("change", (event) => {
   const input = event.target.closest(".minimum-input");
-  if (!input) return;
-  const value = Number(String(input.value).replace(",", "."));
-  if (!Number.isFinite(value) || value < 0) { showToast("Escribe un uso mínimo válido."); render(); return; }
-  state.overrides[input.dataset.key] = value;
-  localStorage.setItem(OVERRIDE_KEY, JSON.stringify(state.overrides));
+  const order = event.target.closest(".order-input");
+  if (!input && !order) return;
+  const target = input || order;
+  const value = Number(String(target.value).replace(",", "."));
+  if (!Number.isFinite(value) || value < 0 || (order && (!Number.isInteger(value) || value > Number(order.dataset.max)))) { showToast(order ? `Pedido máximo: ${order.dataset.max}.` : "Uso mínimo no válido."); render(); return; }
+  if (input) {
+    state.overrides[input.dataset.key] = value;
+    localStorage.setItem(OVERRIDE_KEY, JSON.stringify(state.overrides));
+  } else {
+    state.orderDraft[order.dataset.key] = value;
+    localStorage.setItem(ORDER_KEY, JSON.stringify(state.orderDraft));
+  }
   render();
+});
+elements.storeType.addEventListener("change", () => {
+  const store = elements.storeFilter.value;
+  if (!store || state.dataset.storePolicies.has(store)) return;
+  if (elements.storeType.value === "") delete state.storeTypes[store];
+  else state.storeTypes[store] = elements.storeType.value === "yes";
+  localStorage.setItem(STORE_TYPE_KEY, JSON.stringify(state.storeTypes));
+  render();
+});
+elements.moduleNav.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-module]");
+  if (!button || button.hidden) return;
+  state.activeModule = button.dataset.module;
+  renderModules();
+});
+elements.menuModule.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-open-module]");
+  if (!button || button.hidden) return;
+  state.activeModule = button.dataset.openModule;
+  renderModules();
 });
 for (const eventName of ["dragenter", "dragover"]) elements.dropZone.addEventListener(eventName, (event) => { event.preventDefault(); elements.dropZone.classList.add("dragover"); });
 for (const eventName of ["dragleave", "drop"]) elements.dropZone.addEventListener(eventName, (event) => { event.preventDefault(); elements.dropZone.classList.remove("dragover"); });
