@@ -1,0 +1,38 @@
+name: Validar motores
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar proyecto
+        uses: actions/checkout@v4
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ejecutar pruebas
+        run: python -m unittest discover -s tests -v
+      - name: Compilar motor Python
+        run: python -m py_compile scripts/compatibilidad_xlsm.py
+      - name: Probar motor JavaScript
+        run: node --test tests/engine.test.mjs
+      - name: Validar interfaz pública
+        run: node --check assets/app.js
+      - name: Impedir bases operativas
+        run: |
+          if git ls-files | grep -Ei '\.(xls|xlsx|xlsm|xlsb|csv|tsv)$'; then
+            echo "No se permiten archivos base u operativos en el repositorio."
+            exit 1
+          fi
+          if grep -nEi 'Exportar diagnóstico|demoButton|archivo_patron' index.html assets/app.js assets/engine.mjs; then
+            echo "Se detectó lógica obsoleta."
+            exit 1
+          fi

@@ -1,15 +1,14 @@
 ## Objetivo
 
-Describe el cambio y el módulo afectado.
+Describe el cambio en los motores de lectura o análisis.
 
 ## Validación
 
 - [ ] No contiene Excel operativos ni históricos reales.
 - [ ] No contiene CeCo con resultados, datos personales, credenciales o rutas locales.
-- [ ] `config/conexiones.example.json` conserva únicamente valores de ejemplo.
 - [ ] Las pruebas automáticas terminan correctamente.
-- [ ] La base de 21 días continúa como solo lectura.
-- [ ] La acumulación mantiene la llave única y evita duplicados.
+- [ ] La detección depende de la estructura, no del nombre del archivo.
+- [ ] Solo se lee la fuente `_ac` y la consolidación evita duplicados.
 
 ## Evidencia
 
