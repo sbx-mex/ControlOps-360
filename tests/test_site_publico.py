@@ -44,10 +44,11 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertNotIn("fetch(", app)
         self.assertNotIn("XMLHttpRequest", app)
 
-    def test_carga_multiple_es_exclusiva_para_xlsm(self):
-        self.assertIn('accept=".xlsm,application/vnd.ms-excel.sheet.macroEnabled.12"', self.html)
+    def test_carga_multiple_y_xlsx_solo_como_parametro(self):
+        self.assertIn('accept=".xlsm,.xlsx,', self.html)
         self.assertIn(" multiple hidden", self.html)
-        self.assertNotIn(".xlsx", self.html.lower())
+        app = (ROOT / "assets" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('parameter ? "El XLSX no es un parámetro compatible."', app)
 
     def test_interfaz_no_exporta_diagnosticos_ni_usa_demo(self):
         combined = self.html + (ROOT / "assets" / "app.js").read_text(encoding="utf-8")
@@ -64,6 +65,15 @@ class SitioPublicoTests(unittest.TestCase):
     def test_resumen_prioriza_peak_hour_y_kpis(self):
         for token in ("Venta neta", "Órdenes", "Ticket promedio", "UPT", "Peak Hour", "Enfoque gerente"):
             self.assertIn(token, self.html)
+
+    def test_modulos_adaptativos_y_acerca_de(self):
+        for token in ('data-open-module="sales"', 'data-open-module="audit"', 'data-open-module="order"', 'data-open-module="baking"', 'data-open-module="about"', "Acerca de"):
+            self.assertIn(token, self.html)
+
+    def test_primero_despliega_menu_y_separa_los_flujos(self):
+        self.assertIn('id="menuModule" data-view="menu"', self.html)
+        self.assertIn('id="salesModule" data-view="sales" hidden', self.html)
+        self.assertIn('id="auditModule" data-view="audit" hidden', self.html)
 
     def test_motor_estructural_esta_versionado(self):
         engine = ROOT / "assets" / "engine.mjs"

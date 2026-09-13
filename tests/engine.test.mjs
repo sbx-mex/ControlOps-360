@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  addReferenceRows, addRows, addUsageRows, buildExecutiveSummary, buildUsageSummary,
+  addAuditRows, addReferenceRows, addRows, addUsageRows, buildAuditSummary, buildCupSummary, buildExecutiveSummary, buildUsageSummary,
   classifyStructure, createDataset, isAcSource, matchStructure, mergeDataset,
 } from "../assets/engine.mjs";
 
@@ -81,4 +81,34 @@ test("conserva filas sin IDProducto y detecta negativos", () => {
   const result = buildExecutiveSummary(dataset);
   assert.equal(dataset.missingProductRows, 1);
   assert.equal(result.exceptions, 1);
+});
+
+test("resume auditoría por estructura _ac", () => {
+  const dataset = createDataset();
+  addAuditRows(dataset, "auditVoid", ["IDTienda", "FechaHora", "Ticket", "IDProducto", "IdVoid", "VoidReason", "Total"], [[38101, 45550.5, 100, 20, 1, "Error captura", -90]]);
+  const audit = buildAuditSummary(dataset, { store: "38101" });
+  assert.equal(audit.voidCount, 1);
+  assert.equal(audit.voidTotal, 90);
+  assert.equal(audit.topReason.name, "Error captura");
+});
+
+test("WOE bloquea vasos que no aplican al CeCo", () => {
+  const dataset = createDataset();
+  addUsageRows(dataset, ["IDTienda", "Fecha", "IDArticulo", "NombreArticulo", "UsoIdeal"], [[38101, 45550, 10, "Vaso Compostable Caliente 12 oz", 10]]);
+  addReferenceRows(dataset, "woe", ["Nombre Micros", "#SAP", "#DIA", "Descripcion WOE", "UMB WOE Cantidad pedido", "Comentario Para Revision"], [["Vaso Compostable Caliente 12 oz", 149443, "013895", "Vaso", 1000, "Compostable: Si"]]);
+  const usage = buildUsageSummary(dataset, { store: "38101", storeType: false });
+  assert.equal(usage.items[0].applicable, false);
+  assert.equal(usage.items[0].sap, "149443");
+});
+
+test("Normalizados convierte Bebida Alta Caliente a vaso 12 oz", () => {
+  const dataset = createDataset();
+  addRows(dataset, headers, [salesRow({ product: 27 })]);
+  dataset.salesFacts[0].priceLevel = 2;
+  addReferenceRows(dataset, "product", ["IDProducto", "Descripcion"], [[27, "Cappuccino"]]);
+  addReferenceRows(dataset, "woe", ["Nombre Micros", "#SAP", "#DIA", "Descripcion WOE", "UMB WOE Cantidad pedido", "Comentario Para Revision"], [["Vaso de Papel 12 oz", 149227, "000873", "Vaso", 1000, "Compostable: No"]]);
+  const summary = buildExecutiveSummary(dataset, { store: "38101" });
+  const cups = buildCupSummary(dataset, summary, { store: "38101", storeType: false });
+  assert.equal(cups.quantity, 2);
+  assert.equal(cups.ready, true);
 });

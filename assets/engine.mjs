@@ -3,10 +3,15 @@
 export const STRUCTURES = Object.freeze({
   sales: ["IDTienda", "FechaHora", "Ticket", "SecTrans", "SecDtl", "Id", "IDProducto", "Cantidad", "Total", "CantidadAjustada"],
   usage: ["IDTienda", "Fecha", "IDArticulo", "NombreArticulo", "UsoIdeal"],
+  auditTicket: ["IDTienda", "Ticket", "Fecha", "Estatus", "Total", "FechaNegocio"],
+  auditVoid: ["IDTienda", "FechaHora", "Ticket", "IDProducto", "IdVoid", "VoidReason", "Total"],
+  auditPayment: ["IDTienda", "FechaHora", "Ticket", "IdFormaPago", "FormaPagDesc", "MontoTotal", "Total"],
   product: ["IDProducto", "Descripcion"],
   store: ["IDTienda", "Tienda"],
   stock: ["IDArticulo", "NombreArticuloStock", "PickPack", "UnidadStock"],
   compostable: ["inven_itm_name", "Compostable"],
+  woe: ["Nombre Micros", "#SAP", "#DIA", "Descripcion WOE", "UMB WOE Cantidad pedido"],
+  baking: ["Grupo de horneo", "Producto en reporte", "Descongelacion", "Horneo", "Temperatura", "Máximo por charola", "Se puede hornear junto"],
 });
 
 export const REQUIRED_HEADERS = STRUCTURES.sales;
@@ -17,9 +22,17 @@ export const OPTIONAL_HEADERS = Object.freeze([
 export const DAY_LABELS = Object.freeze(["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]);
 const ORDER_FACTOR = Object.freeze({ 2: 5, 3: 4, 4: 3, 5: 2 });
 const DAY_MS = 86_400_000;
+const HOT_DRINKS = new Set([
+  "BundDona+COD", "COD Chiapas", "COD Dcf Espresso", "COD Espresso R", "CODEspTraveleDLV", "Caffe Mocha", "Caffe Mocha Bco.", "Caffe Mocha Dlv",
+  "Cappuccino", "CappuccinoSRUs", "Caramel Latte", "Caramel Macc PRO", "Caramel Macchiat", "CaramelLatteSRUs", "Chai Latte ST", "Chamomile",
+  "Choco Caliente", "Choco Mexicano", "Chocolate Blanco", "Cinnamon D Latte", "Cortado", "Cortado Brown S", "Cortado MochaBco", "Esp Macchi Doppi",
+  "Esp Macchi Solo", "Espreso Ame 49ST", "Espresso America", "Flat White", "FlatWhiteSRUs", "Hibiscus", "Latte Cal Hibisc", "Latte Cal Mint",
+  "Latte Macchiato", "Lavanda Latte", "Leche al Vapor", "MIS Espresso R", "MIS Sh Gr Mexico", "MatProtein Latte", "Matcha Tea Latte", "Mint Blend",
+  "Mocha Bco Dlv", "VainiSFLatteSRUs", "Vainilla Latte", "VainillaLattSRUs",
+].map(normalize));
 
 export function normalize(value) {
-  return String(value ?? "")
+  return String(value ?? "").replace(/_x[0-9a-f]{4}_/gi, " ")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z0-9]+/g, "")
@@ -119,12 +132,19 @@ export function createDataset() {
   return {
     salesKeys: new Set(),
     usageKeys: new Set(),
+    auditKeys: new Set(),
     salesFacts: [],
     usageFacts: [],
+    auditTickets: [],
+    auditVoids: [],
+    auditPayments: [],
     productCatalog: new Map(),
     storeCatalog: new Map(),
     stockCatalog: new Map(),
     compostableCatalog: new Map(),
+    woeCatalog: new Map(),
+    bakingCatalog: new Map(),
+    storePolicies: new Map(),
     sourceRows: 0,
     uniqueRows: 0,
     duplicateRows: 0,
@@ -167,6 +187,7 @@ export function addRows(dataset, headers, rows, source = {}) {
     dataset.salesKeys.add(key);
     dataset.salesFacts.push({
       key, store, ticket, secTrans, product: product || "Sin IDProducto", quantity, adjusted, total, mode,
+      priceLevel: numberValue(valueAt(row, indexes, "NivelPrecio")),
       transactionKey, negative: quantity < 0 || adjusted < 0 || total < 0, ...date,
       fileName: source.fileName || "", sourceName: source.sourceName || "",
     });
@@ -178,6 +199,34 @@ export function addRows(dataset, headers, rows, source = {}) {
     }
   }
   return Object.fromEntries(Object.keys(before).map((key) => [key, dataset[key] - before[key]]));
+}
+
+export function addAuditRows(dataset, type, headers, rows, source = {}) {
+  const structure = matchStructure(headers, type);
+  if (!structure.compatible) throw new Error(`Faltan columnas: ${structure.missing.join(", ")}`);
+  const indexes = headerMap(headers);
+  const target = type === "auditTicket" ? dataset.auditTickets : type === "auditVoid" ? dataset.auditVoids : dataset.auditPayments;
+  let added = 0;
+  for (const row of rows) {
+    const store = cleanId(valueAt(row, indexes, "IDTienda"));
+    const ticket = cleanId(valueAt(row, indexes, "Ticket"));
+    const date = dateParts(valueAt(row, indexes, type === "auditTicket" ? "Fecha" : "FechaHora"));
+    if (!store || !ticket || !date) continue;
+    const detail = type === "auditVoid" ? cleanId(valueAt(row, indexes, "IdVoid")) : type === "auditPayment" ? cleanId(valueAt(row, indexes, "Id", ["SecDtl"])) : cleanId(valueAt(row, indexes, "Estatus"));
+    const key = [type, store, date.dateKey, ticket, detail].join("\u001f");
+    if (dataset.auditKeys.has(key)) continue;
+    dataset.auditKeys.add(key);
+    target.push({
+      key, store, ticket, total: numberValue(valueAt(row, indexes, "Total")) ?? 0, ...date,
+      amount: numberValue(valueAt(row, indexes, "MontoTotal")) ?? numberValue(valueAt(row, indexes, "Total")) ?? 0,
+      status: String(valueAt(row, indexes, "Estatus") || "").trim(),
+      reason: String(valueAt(row, indexes, "VoidReason") || "Sin motivo").trim(),
+      payment: String(valueAt(row, indexes, "FormaPagDesc") || "Sin forma").trim(),
+      fileName: source.fileName || "", sourceName: source.sourceName || "",
+    });
+    added += 1;
+  }
+  return added;
 }
 
 export function addUsageRows(dataset, headers, rows, source = {}) {
@@ -255,6 +304,39 @@ export function addReferenceRows(dataset, type, headers, rows) {
       const status = compostableValue(valueAt(row, indexes, "Compostable"));
       if (!name || status == null) continue;
       dataset.compostableCatalog.set(normalize(name), status);
+    } else if (type === "woe") {
+      const micros = String(valueAt(row, indexes, "Nombre Micros") || "").trim();
+      if (!micros) continue;
+      const comment = String(valueAt(row, indexes, "Comentario Para Revision") || "").trim();
+      const status = compostableValue(comment.match(/Compostable\s*:\s*(Si|Sí|No)/i)?.[1]);
+      dataset.woeCatalog.set(normalize(micros), {
+        micros,
+        sap: cleanId(valueAt(row, indexes, "#SAP")),
+        dia: cleanId(valueAt(row, indexes, "#DIA")),
+        provider: String(valueAt(row, indexes, "Proveedor") || "").trim(),
+        description: String(valueAt(row, indexes, "Descripcion WOE") || micros).trim(),
+        pack: Math.max(1, numberValue(valueAt(row, indexes, "UMB WOE Cantidad pedido")) || 1),
+        unit: String(valueAt(row, indexes, "Unidad WOE") || valueAt(row, indexes, "UMP WOE") || "").trim(),
+        category: String(valueAt(row, indexes, "Categoría Inventario Micros") || "").trim(),
+        compostable: status,
+      });
+    } else if (type === "baking") {
+      const product = String(valueAt(row, indexes, "Producto en reporte") || "").trim();
+      if (!product) continue;
+      dataset.bakingCatalog.set(normalize(product), {
+        product,
+        group: String(valueAt(row, indexes, "Grupo de horneo") || "").trim(),
+        thaw: String(valueAt(row, indexes, "Descongelacion") || "").trim(),
+        bake: String(valueAt(row, indexes, "Horneo") || "").trim(),
+        temperature: String(valueAt(row, indexes, "Temperatura") || "").trim(),
+        maxTray: numberValue(valueAt(row, indexes, "Máximo por charola")),
+        together: String(valueAt(row, indexes, "Se puede hornear junto") || "").trim(),
+      });
+    } else if (type === "storePolicy") {
+      const id = cleanId(valueAt(row, indexes, "CeCo", ["CC", "IDTienda"]));
+      const status = compostableValue(valueAt(row, indexes, "Compostable"));
+      if (!id || status == null) continue;
+      dataset.storePolicies.set(id, status);
     }
     added += 1;
   }
@@ -292,7 +374,14 @@ export function mergeDataset(target, source) {
     target.usageKeys.add(fact.key);
     target.usageFacts.push(fact);
   }
-  for (const name of ["productCatalog", "storeCatalog", "stockCatalog", "compostableCatalog"]) {
+  for (const name of ["auditTickets", "auditVoids", "auditPayments"]) {
+    for (const fact of source[name]) {
+      if (target.auditKeys.has(fact.key)) continue;
+      target.auditKeys.add(fact.key);
+      target[name].push(fact);
+    }
+  }
+  for (const name of ["productCatalog", "storeCatalog", "stockCatalog", "compostableCatalog", "woeCatalog", "bakingCatalog", "storePolicies"]) {
     for (const [key, value] of source[name]) target[name].set(key, value);
   }
   return result;
@@ -308,8 +397,9 @@ function productInfo(dataset, product) {
 }
 
 export function getFilterOptions(dataset) {
-  const stores = new Set([...dataset.salesFacts.map((fact) => fact.store), ...dataset.usageFacts.map((fact) => fact.store)]);
-  const dates = dataset.salesFacts.map((fact) => fact.dayMs);
+  const audit = [...dataset.auditTickets, ...dataset.auditVoids, ...dataset.auditPayments];
+  const stores = new Set([...dataset.salesFacts.map((fact) => fact.store), ...dataset.usageFacts.map((fact) => fact.store), ...audit.map((fact) => fact.store)]);
+  const dates = [...dataset.salesFacts, ...audit].map((fact) => fact.dayMs);
   return {
     stores: [...stores].sort((a, b) => a.localeCompare(b, "es", { numeric: true })).map((id) => ({ id, name: storeName(dataset, id) })),
     modes: [...new Set(dataset.salesFacts.map((fact) => fact.mode))].sort((a, b) => a.localeCompare(b, "es")),
@@ -432,7 +522,9 @@ export function buildExecutiveSummary(dataset, filters = {}) {
 }
 
 function inferredCompostable(dataset, fact) {
-  const exact = dataset.compostableCatalog.get(normalize(fact.name)) ?? dataset.compostableCatalog.get(normalize(fact.name).replace(/^\d{5,6}/, ""));
+  const key = normalize(fact.name).replace(/^\d{5,6}/, "");
+  const woe = dataset.woeCatalog.get(key);
+  const exact = woe?.compostable ?? dataset.compostableCatalog.get(normalize(fact.name)) ?? dataset.compostableCatalog.get(key);
   if (exact != null) return exact;
   const value = normalize(`${fact.name} ${fact.family}`);
   if (/(compostable|biodegradable|bagazo|ecocomp|cpla)/.test(value)) return true;
@@ -458,20 +550,34 @@ export function buildUsageSummary(dataset, filters = {}, overrides = {}) {
   const factor = ORDER_FACTOR[orders];
   const query = normalize(filters.usageQuery);
   const type = filters.compostable || "all";
+  const policy = filters.storeType === true || filters.storeType === false ? filters.storeType : dataset.storePolicies.get(filters.store);
   const stockByName = new Map([...dataset.stockCatalog.values()].filter((item) => item.name).map((item) => [normalize(item.name).replace(/^\d{5,6}/, ""), item]));
   const items = [...grouped.values()].map((item) => {
     const stock = dataset.stockCatalog.get(item.id) || stockByName.get(normalize(item.name).replace(/^\d{5,6}/, "")) || {};
+    const woe = dataset.woeCatalog.get(normalize(stock.name || item.name).replace(/^\d{5,6}/, ""));
     const calculated = item.totalUse / days;
     const override = numberValue(overrides[`${item.store}|${item.id}`]);
     const minimum = override != null && override >= 0 ? override : calculated;
-    const pack = Math.max(1, Number(stock.pickPack) || 1);
+    const pack = Math.max(1, Number(woe?.pack) || Number(stock.pickPack) || 1);
+    const controlled = woe?.compostable != null || /(vaso|tapa)/.test(normalize(`${woe?.micros || item.name} ${woe?.category || item.family}`));
+    const compostable = woe?.compostable ?? item.compostable;
+    const unmapped = dataset.woeCatalog.size > 0 && !woe;
+    const applicable = !unmapped && ((!controlled || policy == null) ? !controlled : compostable == null || compostable === policy);
     return {
       ...item,
-      name: stock.name || item.name,
-      family: stock.family || item.family,
+      name: woe?.micros || stock.name || item.name,
+      family: woe?.category || stock.family || item.family,
       unit: stock.stockUnit || item.unit,
-      orderUnit: stock.orderUnit || "Unidad",
+      orderUnit: woe?.unit || stock.orderUnit || "Unidad",
       pack,
+      compostable,
+      controlled,
+      applicable,
+      blocked: unmapped || (controlled && policy == null),
+      blockedReason: unmapped ? "Sin WOE" : controlled && policy == null ? "Definir tienda" : "",
+      woeMapped: Boolean(woe),
+      sap: woe?.sap || "",
+      dia: woe?.dia || "",
       calculated,
       minimum,
       maximum: minimum * factor,
@@ -490,6 +596,68 @@ export function buildUsageSummary(dataset, filters = {}, overrides = {}) {
     factor,
     dateFrom: new Date(start).toISOString().slice(0, 10),
     dateTo: new Date(maxDay).toISOString().slice(0, 10),
+    policy,
+    blocked: items.filter((item) => item.blocked).length,
+    excluded: items.filter((item) => !item.applicable).length,
+    mapped: items.filter((item) => item.woeMapped).length,
+  };
+}
+
+function auditFilter(fact, filters, from, to) {
+  return (!filters.store || fact.store === filters.store) && fact.ms >= from && fact.ms <= to;
+}
+
+export function buildAuditSummary(dataset, filters = {}) {
+  const from = dateBoundary(filters.from);
+  const to = dateBoundary(filters.to, true);
+  const tickets = dataset.auditTickets.filter((fact) => auditFilter(fact, filters, from, to));
+  const voids = dataset.auditVoids.filter((fact) => auditFilter(fact, filters, from, to));
+  const payments = dataset.auditPayments.filter((fact) => auditFilter(fact, filters, from, to));
+  const negative = tickets.filter((fact) => fact.total < 0);
+  const reasons = new Map();
+  for (const fact of voids) reasons.set(fact.reason, (reasons.get(fact.reason) || 0) + Math.abs(fact.total));
+  const paymentModes = new Map();
+  for (const fact of payments) paymentModes.set(fact.payment, (paymentModes.get(fact.payment) || 0) + fact.amount);
+  const topReason = [...reasons].sort((a, b) => b[1] - a[1])[0] || ["—", 0];
+  const topPayment = [...paymentModes].sort((a, b) => b[1] - a[1])[0] || ["—", 0];
+  return {
+    tickets: tickets.length,
+    negativeCount: negative.length,
+    negativeTotal: negative.reduce((sum, fact) => sum + fact.total, 0),
+    voidCount: new Set(voids.map((fact) => `${fact.store}|${fact.dateKey}|${fact.ticket}`)).size,
+    voidTotal: voids.reduce((sum, fact) => sum + Math.abs(fact.total), 0),
+    paymentCount: payments.length,
+    paymentTotal: payments.reduce((sum, fact) => sum + fact.amount, 0),
+    topReason: { name: topReason[0], amount: topReason[1] },
+    topPayment: { name: topPayment[0], amount: topPayment[1] },
+    hasData: Boolean(tickets.length || voids.length || payments.length),
+  };
+}
+
+export function buildBakingSummary(dataset, query = "") {
+  const needle = normalize(query);
+  const items = [...dataset.bakingCatalog.values()].filter((item) => !needle || normalize(`${item.product} ${item.group} ${item.together}`).includes(needle));
+  return { items: items.sort((a, b) => a.group.localeCompare(b.group, "es") || a.product.localeCompare(b.product, "es")), count: items.length };
+}
+
+export function buildCupSummary(dataset, summary, filters = {}) {
+  const storeType = filters.storeType === true || filters.storeType === false ? filters.storeType : dataset.storePolicies.get(filters.store);
+  const keys = new Map();
+  for (const fact of summary.facts || []) {
+    const product = productInfo(dataset, fact.product);
+    if (fact.priceLevel !== 2 || !HOT_DRINKS.has(normalize(product.name))) continue;
+    const key = `${fact.transactionKey}|${fact.product}`;
+    keys.set(key, Math.max(keys.get(key) || 0, fact.adjusted));
+  }
+  const quantity = [...keys.values()].reduce((sum, value) => sum + Math.max(0, value), 0);
+  const targetName = storeType === true ? "Vaso Compostable Caliente 12 oz" : storeType === false ? "Vaso de Papel 12 oz" : "Define tipo de tienda";
+  const target = dataset.woeCatalog.get(normalize(targetName));
+  return {
+    quantity,
+    targetName,
+    target,
+    storeType,
+    ready: storeType != null && Boolean(target),
   };
 }
 
