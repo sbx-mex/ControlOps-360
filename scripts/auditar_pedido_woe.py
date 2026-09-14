@@ -121,13 +121,13 @@ def scenario_matrix() -> list[str]:
     return list(scenarios)
 
 
-def load_parameters() -> dict:
-    source = (ROOT / "assets" / "parameters.mjs").read_text(encoding="utf-8")
+def load_parameters(root: Path = ROOT) -> dict:
+    source = (root / "assets" / "parameters.mjs").read_text(encoding="utf-8")
     return json.loads(source[source.index("{"):].rstrip(";\n"))
 
 
-def audit_catalog() -> dict[str, int]:
-    data = load_parameters()
+def audit_catalog(root: Path = ROOT) -> dict[str, int]:
+    data = load_parameters(root)
     woe = next(table for table in data["tables"] if table["type"] == "woe")
     sap_list = next(table for table in data["tables"] if table["type"] == "sapList")
     wh, sh = woe["headers"], sap_list["headers"]
@@ -155,15 +155,15 @@ def audit_catalog() -> dict[str, int]:
     return result
 
 
-def audit_interface() -> dict[str, bool]:
-    ui = (ROOT / "assets" / "ui.mjs").read_text(encoding="utf-8")
+def audit_interface(root: Path = ROOT) -> dict[str, bool]:
+    ui = (root / "assets" / "ui.mjs").read_text(encoding="utf-8")
     order = ui.split("function orderView(){", 1)[1].split("function peakView(){", 1)[0]
     obsolete = ("Uso pendiente hoy", "Base de vasos", "Referencia de uso", "SAP/DIA validados", "Artículos en pedido", "No aplican / sin cruce")
     checks = {
         "controles_obsoletos_retirados": not any(token in order for token in obsolete),
-        "pdf_transito_local": "parseOrderPdf" in ui and (ROOT / "assets" / "vendor" / "pdf.min.mjs").is_file(),
-        "duplicados_bloqueados": "usedPurchaseOrders" in (ROOT / "assets" / "transit.mjs").read_text(encoding="utf-8"),
-        "exportacion_pedagogica": "order-woe" in (ROOT / "assets" / "export.mjs").read_text(encoding="utf-8"),
+        "pdf_transito_local": "parseOrderPdf" in ui and (root / "assets" / "vendor" / "pdf.min.mjs").is_file(),
+        "duplicados_bloqueados": "usedPurchaseOrders" in (root / "assets" / "transit.mjs").read_text(encoding="utf-8"),
+        "exportacion_pedagogica": "order-woe" in (root / "assets" / "export.mjs").read_text(encoding="utf-8"),
     }
     if not all(checks.values()):
         raise AssertionError(f"Interfaz incompleta: {checks}")

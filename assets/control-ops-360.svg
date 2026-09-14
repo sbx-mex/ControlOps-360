@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title description">
+  <title id="title">Control Ops 360</title>
+  <desc id="description">Emblema circular de operación con cuatro herramientas y una validación central.</desc>
+  <circle cx="64" cy="64" r="60" fill="#006241"/>
+  <circle cx="64" cy="64" r="47" fill="none" stroke="#dceadf" stroke-width="2" stroke-dasharray="5 5"/>
+  <path d="M64 17a47 47 0 0 1 39 20" fill="none" stroke="#cba258" stroke-linecap="round" stroke-width="5"/>
+  <path d="m101 26 3 13-13-2" fill="none" stroke="#cba258" stroke-linecap="round" stroke-linejoin="round" stroke-width="5"/>
+  <rect x="34" y="34" width="23" height="23" rx="6" fill="#f7fbf8"/>
+  <rect x="71" y="34" width="23" height="23" rx="6" fill="#f7fbf8"/>
+  <rect x="34" y="71" width="23" height="23" rx="6" fill="#f7fbf8"/>
+  <rect x="71" y="71" width="23" height="23" rx="6" fill="#f7fbf8"/>
+  <path d="M40 46h11M45.5 40.5v11M77 40h11M77 46h11M40 78h11M40 84h7M77 82l4 4 8-10" fill="none" stroke="#006241" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"/>
+  <circle cx="64" cy="64" r="13" fill="#004c36" stroke="#cba258" stroke-width="2"/>
+  <text x="64" y="68" fill="#fff" font-family="Inter,Segoe UI,sans-serif" font-size="11" font-weight="800" text-anchor="middle">360°</text>
+</svg>

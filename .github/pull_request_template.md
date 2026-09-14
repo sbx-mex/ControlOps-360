@@ -1,15 +1,18 @@
-## Objetivo
+## Impacto operativo
 
-Describe el cambio en los motores de lectura o análisis.
+Describe la mejora visible y qué pestañas o cruces toca.
 
-## Validación
+## Continuidad 360°
 
-- [ ] No contiene Excel operativos ni históricos reales.
-- [ ] No contiene CeCo con resultados, datos personales, credenciales o rutas locales.
-- [ ] Las pruebas automáticas terminan correctamente.
-- [ ] La detección depende de la estructura, no del nombre del archivo.
-- [ ] Solo se lee la fuente `_ac` y la consolidación evita duplicados.
+- [ ] Conserva los diez módulos y sus exportaciones.
+- [ ] No contiene Excel, CSV, datos de tienda, CeCo con resultados ni credenciales.
+- [ ] Detecta motores por estructura y conserva sólo la versión interna más vigente.
+- [ ] Bloquea cruces SAP/DIA, parámetros o unidades contradictorias.
+- [ ] Mantiene procesamiento local y marca de confidencialidad.
+- [ ] `python scripts/auditar_proyecto.py --json` termina en VERDE.
+- [ ] Las pruebas Python y JavaScript terminan en VERDE.
+- [ ] El ZIP fue creado y validado con los scripts oficiales.
 
-## Evidencia
+## Evidencia segura
 
-Incluye únicamente resultados de prueba sin información operativa.
+Incluye únicamente salidas sintéticas de prueba, sin información operativa.

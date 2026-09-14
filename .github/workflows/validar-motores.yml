@@ -4,26 +4,36 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: controlops-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validar:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Descargar proyecto
-        uses: actions/checkout@v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
       - name: Configurar Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - name: Instalar dependencias Python
-        run: python -m pip install --disable-pip-version-check -r requirements-dev.txt
+        run: python -m pip install --disable-pip-version-check --require-hashes -r requirements-dev.txt
       - name: Ejecutar pruebas
         run: python -m unittest discover -s tests -v
+      - name: Auditar integración 360
+        run: python scripts/auditar_proyecto.py --json
       - name: Compilar motor Python
         run: python -m py_compile scripts/*.py
       - name: Probar motor JavaScript
@@ -38,14 +48,19 @@ jobs:
           node --check assets/engine.mjs
           node --check assets/export.mjs
           node --check assets/operations.mjs
+          node --check assets/transit.mjs
           node --check assets/ui.mjs
+      - name: Construir y auditar entrega ZIP
+        run: |
+          python scripts/crear_zip_seguro.py /tmp/ControlOps-360.zip
+          python scripts/auditar_proyecto.py --zip /tmp/ControlOps-360.zip --json
       - name: Impedir bases operativas
         run: |
-          if git ls-files | grep -Ei '\.(xls|xlsx|xlsm|xlsb|csv|tsv)$'; then
+          if git ls-files | grep -Eiq '\.(xls|xlsx|xlsm|xlsb|csv|tsv)$'; then
             echo "No se permiten archivos base u operativos en el repositorio."
             exit 1
           fi
-          if grep -nEi 'Exportar diagnóstico|demoButton|archivo_patron' index.html assets/app.js assets/engine.mjs assets/export.mjs; then
+          if grep -nEi 'Exportar diagnóstico|demoButton|archivo_patron|Uso pendiente hoy|Base de vasos' index.html assets/app.js assets/engine.mjs assets/export.mjs assets/ui.mjs; then
             echo "Se detectó lógica obsoleta."
             exit 1
           fi
