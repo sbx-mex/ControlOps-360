@@ -1,25 +1,29 @@
-# Seguridad y manejo de datos
+# Seguridad y confidencialidad
 
-Este repositorio público conserva motores, parámetros de cruce, pruebas y documentación técnica. La aplicación procesa los archivos localmente.
+Control Ops 360° opera con privacidad desde diseño: los Excel y PDF se leen dentro del navegador y no se transfieren a esta página, a los proyectos conectados ni a servicios externos.
+
+## Controles obligatorios
+
+- CSP sin conexiones salientes, formularios, marcos ni contenido remoto.
+- Dependencias Python fijadas por versión y SHA-256.
+- GitHub Actions fijadas a commits completos y con permisos de sólo lectura.
+- Límites de cantidad y tamaño antes de leer Excel o PDF.
+- Cruce de CeCo, SAP y DIA con bloqueo ante contradicciones.
+- Selección automática del motor con fecha interna y cobertura más recientes.
+- Exportación con validación de contenido, nombre seguro, límite de tamaño y marca confidencial.
+- ZIP determinista sin enlaces, rutas relativas inseguras, bases operativas ni archivos sensibles; cada archivo se verifica contra `ZIP_MANIFEST.sha256`.
 
 ## No publicar
 
-- Archivos reales de inventario, ventas, transacciones o colaboradores.
-- Históricos generados por una tienda.
-- CeCo asociado con resultados operativos reales.
-- Rutas personales, correos, tokens, contraseñas o cadenas de conexión.
-- Libros `.xlsm`, `.xlsx` o archivos tabulares provenientes de la operación.
+- Excel, CSV o históricos reales de tienda.
+- Ventas, inventarios, transacciones, colaboradores o CeCo asociados con resultados.
+- Exportaciones generadas a partir de información operativa.
+- Tokens, credenciales, correos, rutas personales o llaves privadas.
 
-El `.gitignore` y el workflow bloquean todos los formatos Excel y CSV sin excepciones.
-
-La aplicación valida la estructura: hechos exclusivamente en `_ac`, catálogos de apoyo y parámetros `tbl` con claves únicas. Las cinco tbl suministradas y las referencias públicas WOE/CeCo se conservan como datos de referencia versionados en `assets/parameters.mjs`, nunca como resultados de venta o inventario.
-
-Los libros nuevos se validan antes de incorporarlos. Otro CeCo, claves contradictorias, parámetros inválidos, ZIP dañado o descompresión excesiva bloquean ese archivo. Una política compostable desconocida o contradictoria impide pedir los artículos controlados.
-
-La política CSP bloquea conexiones salientes; no se utiliza `fetch`, `XMLHttpRequest`, analítica ni servicios de terceros. No se ejecutan macros ni conexiones de Excel. Los enlaces a otros proyectos abren una página separada y no reciben los archivos.
-
-Los datos operativos viven en memoria durante la sesión. Los mínimos y las capturas manuales se conservan en el almacenamiento del navegador por CeCo; no utilizar un equipo compartido sin control de acceso. Las exportaciones pueden contener información operativa: compartirlas sólo por canales autorizados.
+Los ajustes manuales pueden permanecer en el almacenamiento local del navegador por CeCo. En un equipo compartido, usa un perfil controlado y limpia los datos del sitio al terminar.
 
 ## Reporte responsable
 
-Si se detecta información sensible, no abrir un issue público con capturas o datos. Retirar el contenido mediante un PR de saneamiento y notificar al administrador del repositorio por un canal corporativo autorizado.
+No abras un issue público con información operativa. Retira el contenido mediante un PR de saneamiento y avisa al administrador por un canal corporativo autorizado.
+
+CONFIDENCIAL · USO OPERATIVO INTERNO

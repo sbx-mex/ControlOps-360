@@ -34,13 +34,13 @@ def normalize(value: object) -> str:
     return re.sub(r"[^a-z0-9]", "", plain.lower())
 
 
-def load_parameters() -> dict:
-    source = (ROOT / "assets" / "parameters.mjs").read_text(encoding="utf-8")
+def load_parameters(root: Path = ROOT) -> dict:
+    source = (root / "assets" / "parameters.mjs").read_text(encoding="utf-8")
     return json.loads(source[source.index("{") :].rstrip(";\n"))
 
 
-def audit_table() -> dict[str, object]:
-    data = load_parameters()
+def audit_table(root: Path = ROOT) -> dict[str, object]:
+    data = load_parameters(root)
     table = next(entry for entry in data["tables"] if entry["type"] == "food")
     headers = table["headers"]
     required = ("Item", "Alimento", "#Alimento", "Ensamble", "Nombre Unificado Ensamble", "Ingrediente ensamble")
@@ -79,11 +79,11 @@ def scenario_matrix() -> list[str]:
     return list(scenarios)
 
 
-def audit_interface() -> dict[str, bool]:
-    ui = (ROOT / "assets" / "ui.mjs").read_text(encoding="utf-8")
-    operations = (ROOT / "assets" / "operations.mjs").read_text(encoding="utf-8")
-    export = (ROOT / "assets" / "export.mjs").read_text(encoding="utf-8")
-    recipes = (ROOT / "assets" / "assembly.mjs").read_text(encoding="utf-8")
+def audit_interface(root: Path = ROOT) -> dict[str, bool]:
+    ui = (root / "assets" / "ui.mjs").read_text(encoding="utf-8")
+    operations = (root / "assets" / "operations.mjs").read_text(encoding="utf-8")
+    export = (root / "assets" / "export.mjs").read_text(encoding="utf-8")
+    recipes = (root / "assets" / "assembly.mjs").read_text(encoding="utf-8")
     checks = {
         "filtro_multiple_semana_dia": "multiFilter('weeks'" in ui and "multiFilter('weekdays'" in ui,
         "guia_pedagogica": all(text in ui for text in ("Elige semanas", "Marca los días", "Prepara por franja", "Anticipa ingredientes")),

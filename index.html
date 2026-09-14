@@ -3,29 +3,36 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+<meta name="description" content="Control Ops 360°, multiherramienta local para la operación de tienda.">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; worker-src 'self'; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <meta name="theme-color" content="#004c36">
 <title>Control Ops 360°</title>
+<link rel="icon" href="assets/control-ops-360.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
 <a class="skip-link" href="#content">Ir al contenido</a>
 <header class="topbar">
- <button class="brand" id="homeButton" aria-label="Menú principal"><span class="brandmark">C<span>360</span></span><span>Control Ops <b>360°</b></span></button>
+ <button class="brand" id="homeButton" aria-label="Ir al menú principal"><img src="assets/control-ops-360.svg" width="48" height="48" alt=""><span class="brand-copy"><small>STARBUCKS OPERATIONS</small><span>Control Ops <b>360°</b></span></span></button>
  <div id="storeBadge" class="store-badge" hidden></div>
+ <div class="privacy-chip" title="Los archivos se procesan sólo en este navegador"><span aria-hidden="true">◆</span> Proceso local</div>
  <div class="top-actions"><button id="resetButton" class="quiet" hidden>Cambiar tienda</button><button id="uploadButton" class="primary">＋ Cargar Excel</button></div>
  <input id="fileInput" type="file" accept=".xlsm,.xlsx,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden>
 </header>
 <div id="loading" class="loading" role="status" aria-live="polite" hidden><div class="loading-card"><div class="spinner"></div><h2>Preparando tu tienda</h2><p id="progressText">Validando archivos…</p></div></div>
 <main id="content" tabindex="-1">
  <section id="emptyState" class="welcome">
-  <span class="eyebrow">MULTIHERRAMIENTA OPERATIVA</span><h1>Abre los motores<br>de tu tienda.</h1>
-  <button id="dropZone" class="drop-zone"><span class="file-icon">▦</span><strong>Cargar uno o varios Excel</strong><span>XLSM de tienda · XLSX de parámetros</span></button>
-  <div class="welcome-tools"><span>Max & Min</span><span>Peak Hour</span><span>Pedido WOE</span><span>Auditoría</span></div>
+  <img class="welcome-mark" src="assets/control-ops-360.svg" width="92" height="92" alt="Control Ops 360°">
+  <span class="eyebrow">STARBUCKS · MULTIHERRAMIENTA OPERATIVA</span><h1>Tu operación completa.<br><span>Una sola dirección.</span></h1>
+  <p class="welcome-copy">Carga los motores actualizados y convierte tus datos en decisiones claras, cruces validados y exportaciones listas para operar.</p>
+  <button id="dropZone" class="drop-zone" type="button"><span class="file-icon" aria-hidden="true">⇧</span><strong>Cargar uno o varios Excel</strong><span>XLSM de tienda · XLSX de parámetros · procesamiento local</span></button>
+  <div class="welcome-tools"><span>360°</span><span>JUNTÉMONOS MÁS</span><span>#GreenApronService</span></div>
   <button class="text-button" data-module="about">Acerca de</button>
  </section>
  <section id="workspace" class="workspace" hidden>
-  <aside class="sidebar"><span class="sidebar-label">TU OPERACIÓN</span><nav id="moduleNav" aria-label="Herramientas"></nav><div class="sidebar-bottom"><button data-module="about">Acerca de</button><small>V5.5 · Datos locales</small></div></aside>
+  <aside class="sidebar"><span class="sidebar-label">TU OPERACIÓN</span><nav id="moduleNav" aria-label="Herramientas"></nav><div class="sidebar-bottom"><button data-module="about">Seguridad y alcance</button><small>V6.0 · Integración 360°</small></div></aside>
   <div class="workarea">
    <div class="page-heading"><div><p class="eyebrow" id="periodTitle"></p><h1 id="moduleTitle"></h1></div><div class="export-actions" id="exportActions" hidden><button id="excelButton">Excel ↓</button><button id="pdfButton">PDF ↓</button></div></div>
    <div id="moduleContent"></div>
@@ -34,6 +41,7 @@
 </main>
 <dialog id="confirmation" aria-labelledby="confirmationTitle"><div class="confirm-icon">✓</div><h2 id="confirmationTitle">Tienda lista</h2><div id="confirmationContent"></div><button id="confirmButton" class="primary">Continuar</button></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<footer class="site-footer"><div><img src="assets/control-ops-360.svg" width="34" height="34" alt=""><span><strong>Control Ops 360°</strong><small>JUNTÉMONOS MÁS · #GreenApronService</small></span></div><p><b>CONFIDENCIAL · USO OPERATIVO INTERNO</b><span>Los archivos se procesan localmente y no se envían a terceros.</span></p><small>Diseñador por Jorge Alcantar Aguiar &amp; Enrique César Flores</small></footer>
 <script type="module" src="assets/app.js"></script>
 </body>
 </html>
