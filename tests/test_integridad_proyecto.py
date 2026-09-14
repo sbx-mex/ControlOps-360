@@ -14,6 +14,8 @@ class ProjectIntegrityTests(unittest.TestCase):
         self.assertEqual(report["estado"], "VERDE")
         self.assertEqual(report["integracion_360"]["modulos_navegables"], 10)
         self.assertEqual(report["seguridad"]["bases_operativas"], 0)
+        self.assertLessEqual(report["rendimiento"]["grafo_inicial_bytes"], report["rendimiento"]["presupuesto_bytes"])
+        self.assertGreater(report["rendimiento"]["reduccion_porcentaje"], 60)
 
     def test_official_zip_is_manifested_and_green(self):
         with tempfile.TemporaryDirectory() as temporary:

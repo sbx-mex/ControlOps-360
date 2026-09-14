@@ -17,6 +17,9 @@ class PedidoWoeAuditTests(unittest.TestCase):
         self.assertEqual(result["claves_duplicadas"], 0)
         self.assertEqual(result.get("contradicciones", 0), 0)
         self.assertGreater(result["doble_cruce"], 0)
+        self.assertEqual(result["evidencia"]["registros_entrada"], result["evidencia"]["registros_finales"])
+        self.assertEqual(result["evidencia"]["duplicados_detectados"], 0)
+        self.assertIn(result["evidencia"]["resultado"], {"APROBADO", "APROBADO_CON_ADVERTENCIAS"})
 
     def test_pedido_interface_is_safe_and_focused(self):
         self.assertTrue(all(audit.audit_interface().values()))

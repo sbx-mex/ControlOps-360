@@ -1,5 +1,14 @@
 # Historial consolidado
 
+## 6.1.0 · Gestión 360° trazable
+
+- Añade Resumen 360°, Finanzas, Alcance y calidad, y Fuentes cargadas sin duplicar las pantallas operativas.
+- Corrige la selección de Motores: deduplica sólo por CeCo, tipo y periodo, y conserva periodos distintos.
+- Expone archivos seleccionados, omitidos y bloqueados con motivo, periodo, CeCo y hora de lectura.
+- Carga parámetros, lector Excel, exportador y tránsito sólo cuando se necesitan; Python protege el presupuesto inicial.
+- Amplía la evidencia de cruces con cardinalidad, entradas, coincidencias, duplicados, salidas y diferencias.
+- Incorpora 15 escenarios 360° de regresión para cobertura, CeCo, duplicados, periodos, consistencia y volumen.
+
 ## 6.0.0 · Integración 360° estable
 
 - Recupera en una sola base Pedido WOE, Ensamble, Top, Esfuerzo, Normalizados y Auditoría.

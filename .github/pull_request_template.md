@@ -6,10 +6,12 @@ Describe la mejora visible y qué pestañas o cruces toca.
 
 - [ ] Conserva los diez módulos y sus exportaciones.
 - [ ] No contiene Excel, CSV, datos de tienda, CeCo con resultados ni credenciales.
-- [ ] Detecta motores por estructura y conserva sólo la versión interna más vigente.
+- [ ] Aísla un solo CeCo y deduplica únicamente por tipo y periodo equivalentes.
+- [ ] Lista fuentes seleccionadas, omitidas y bloqueadas con su motivo.
 - [ ] Bloquea cruces SAP/DIA, parámetros o unidades contradictorias.
 - [ ] Mantiene procesamiento local y marca de confidencialidad.
 - [ ] `python scripts/auditar_proyecto.py --json` termina en VERDE.
+- [ ] `python scripts/auditar_rendimiento.py --json` respeta el presupuesto inicial.
 - [ ] Las pruebas Python y JavaScript terminan en VERDE.
 - [ ] El ZIP fue creado y validado con los scripts oficiales.
 

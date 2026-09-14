@@ -34,6 +34,8 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Auditar integración 360
         run: python scripts/auditar_proyecto.py --json
+      - name: Medir carga inicial
+        run: python scripts/auditar_rendimiento.py --json
       - name: Compilar motor Python
         run: python -m py_compile scripts/*.py
       - name: Probar motor JavaScript
