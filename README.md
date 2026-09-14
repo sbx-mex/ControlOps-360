@@ -8,11 +8,20 @@ Reemplaza los archivos conservando las carpetas del ZIP. No incluye XLSM, ventas
 
 La lógica y las limitaciones están en **Acerca de**. Tapas automáticas, historial entre sesiones, venta por empleado y descuentos completos quedan para la siguiente versión. Code Brew y Lay Out siguen siendo proyectos externos.
 
+### Pedido WOE V5.4
+
+`Pedido WOE` ahora guía al usuario en cuatro pasos: programar el ciclo, agregar pedidos en tránsito, contar la existencia física y exportar. La fecha de captura inicia con el día local actual; el porcentaje de uso pendiente se calcula automáticamente y ya no se muestra como filtro.
+
+Los PDF SAP de pedidos en tránsito se leen localmente en el navegador. Cada remisión conserva su orden y fecha; el cruce prioriza SAP y DIA, bloquea contradicciones y sólo descuenta tránsito que cae dentro de la cobertura. La pantalla ya no muestra `Base de vasos` ni los cuatro indicadores técnicos de la versión anterior.
+
+Las exportaciones de Excel y PDF están orientadas a operación: incluyen identificación SAP/DIA, descripción, existencia, tránsito por remisión, cantidad final y los cruces que requieren revisión. Ningún archivo operativo se envía fuera del navegador.
+
 ## Pruebas
 
 ```bash
 python -m unittest discover -s tests -v
 node --test tests/*.test.mjs
+python scripts/auditar_pedido_woe.py
 python scripts/compatibilidad_xlsm.py motor.xlsm parametro.xlsx
 ```
 
