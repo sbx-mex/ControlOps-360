@@ -363,6 +363,21 @@ export function auditStore(d,f={}){
  return {items:rows,voidCount:rows.length,focusCount:rows.filter(row=>row.focus).length,reopenCount:rows.filter(row=>row.reopen).length,negativeCount:rows.filter(row=>row.hasNegative).length,negativeAmount:sum(rows.filter(row=>row.hasNegative),row=>Math.abs(row.negative)),totalAmount:sum(rows,'amount'),pending:rows.filter(row=>row.partner==='Partner no identificado'||row.reasons.length===0).length,employees,hours,topPartner:employees[0]||null,peakHour:hours[0]||null,filterOptions:{reasons:[...new Set(allVoids.map(row=>row.reason).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es')),partners:[...new Set(allVoids.map(optionPartner).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es')),weeks:[...new Set(allVoids.map(row=>weekKey(row.dateKey)))].sort(),weekdays:[...new Set(allVoids.map(row=>row.weekday))].sort()},...dateExtent(voids)};
 }
 
+export const MOTOR_REQUIREMENTS=Object.freeze([
+ {id:'sales',name:'Ventas',detail:'Finanzas, operación e indicadores',types:['sales']},
+ {id:'usage',name:'Uso y stock',detail:'Inventario y Pedido WOE',types:['usage']},
+ {id:'audit',name:'Auditoría',detail:'Voids y revisión por ticket',types:['auditTicket','auditVoid','auditLegacy']},
+]);
+function financialBucket(rows){const transactions=new Set(rows.map(row=>row.transactionKey)),dates=[...new Set(rows.map(row=>row.dateKey))].sort(),sales=sum(rows,'total'),units=sum(rows,row=>row.adjusted>0?row.adjusted:0);return {sales,orders:transactions.size,units,days:dates.length,from:dates[0]||'',to:dates.at(-1)||'',ticket:transactions.size?sales/transactions.size:null};}
+export function management360(d){
+ const stores=[...new Set([...d.salesFacts,...d.usageFacts,...d.auditTickets,...d.auditVoids,...d.auditPayments,...(d.auditLegacyRows||[])].map(row=>row.store).filter(Boolean))];
+ const groups=MOTOR_REQUIREMENTS.map(group=>{const rows=group.id==='sales'?d.salesFacts:group.id==='usage'?d.usageFacts:[...d.auditTickets,...d.auditVoids,...(d.auditLegacyRows||[])],received=group.types.some(type=>d.sourceTypes.has(type)),extent=dateExtent(rows);return {...group,received,valid:received&&rows.length>0,rows:rows.length,...extent};});
+ const valid=groups.filter(group=>group.valid),periods=new Set(valid.map(group=>`${group.from}|${group.to}`)),from=valid.map(group=>group.from).filter(Boolean).sort()[0]||'',to=valid.map(group=>group.to).filter(Boolean).sort().at(-1)||'';
+ const weeks=new Map();for(const row of d.salesFacts){const key=weekKey(row.dateKey);if(!weeks.has(key))weeks.set(key,[]);weeks.get(key).push(row);}const weekly=[...weeks].sort(([a],[b])=>a.localeCompare(b)).map(([week,rows])=>({week,...financialBucket(rows)})),current=weekly.at(-1)||null,previous=weekly.at(-2)||null,delta=(value,base)=>value==null||base==null||base===0?null:value/base-1;
+ const missing=groups.filter(group=>!group.valid),coverage=groups.length?valid.length/groups.length:0,warnings=[];if(missing.length)warnings.push(`Faltan ${missing.map(group=>group.name).join(', ')}.`);if(periods.size>1)warnings.push('Los Motores válidos no cubren el mismo periodo.');if(stores.length>1)warnings.push('Se detectó más de un CeCo; la lectura debe bloquearse.');
+ return {ceco:stores.length===1?stores[0]:'',mixedCeCo:stores.length>1,groups,expected:groups.length,received:groups.filter(group=>group.received).length,valid:valid.length,coverage,status:stores.length>1?'invalid':valid.length===groups.length&&periods.size<=1?'complete':valid.length?'partial':'unavailable',from,to,lastUpdate:to,periodAligned:periods.size<=1,warnings,finance:{available:!!current,current,previous,deltaSales:delta(current?.sales,previous?.sales),deltaOrders:delta(current?.orders,previous?.orders),deltaTicket:delta(current?.ticket,previous?.ticket),total:financialBucket(d.salesFacts),weekly}};
+}
+
 export function reportFor(module,result,context={}){
  const name=MODULES.find(m=>m.id===module)?.name||module,title=name+(context.subtab?` · ${context.subtab}`:''),r=result;
  const report={title,store:context.store||'',period:shortPeriod(r.from,r.to),filters:context.filterLabel||'',summary:[],sheets:[]};
