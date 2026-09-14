@@ -5,7 +5,7 @@ export const MODULES=[
  {id:'maxmin',name:'Max & Min',caption:'Uso, mínimos y tarjetas',icon:'▦',type:'usage'},
  {id:'trend',name:'Tendencia de uso',caption:'Productos y días comparables',icon:'↗',type:'usage'},
  {id:'order',name:'Pedido WOE',caption:'Cobertura, existencias y pedido',icon:'▤',type:'usage'},
- {id:'peak',name:'Peak Hour',caption:'Comparables, ciclos y medias horas',icon:'◷',type:'sales'},
+ {id:'peak',name:'Peak Hour',caption:'Todo el día, cada media hora',icon:'◷',type:'sales'},
  {id:'normal',name:'Normalizados',caption:'Tamaños, vasos y crema',icon:'◉',type:'sales'},
  {id:'baking',name:'Bitácora de horneo',caption:'Previsión y próximas tandas',icon:'♨',type:'sales'},
  {id:'top',name:'Top Bebidas & Alimentos',caption:'Ranking y mezcla semanal',icon:'≡',type:'sales'},
@@ -13,7 +13,7 @@ export const MODULES=[
 ];
 export function availableModules(d){return MODULES.filter(m=>m.type==='audit'?d.sourceTypes.has('auditTicket')||d.sourceTypes.has('auditVoid'):m.type==='usage'?d.usageFacts.length:d.salesFacts.length&&(m.id==='peak'||d.productCatalog.size));}
 export function filterFacts(facts,f={}){
- const weeks=Array.isArray(f.weeks)?f.weeks.filter(Boolean):[],weekdays=Array.isArray(f.weekdays)?f.weekdays.filter(x=>x!==''&&x!=null).map(Number):[],modes=Array.isArray(f.modes)?f.modes.filter(Boolean):[];
+ const weeks=Array.isArray(f.weeks)?f.weeks.filter(Boolean):[],weekdays=Array.isArray(f.weekdays)?f.weekdays.filter(v=>v!==''&&v!=null).map(Number):[],modes=Array.isArray(f.modes)?f.modes.filter(Boolean):[];
  return facts.filter(r=>(!f.store||r.store===f.store)&&(!f.from||r.dateKey>=f.from)&&(!f.to||r.dateKey<=f.to)&&(!f.week||weekKey(r.dateKey)===f.week)&&(!weeks.length||weeks.includes(weekKey(r.dateKey)))&&(f.weekday==null||f.weekday===''||r.weekday===Number(f.weekday))&&(!weekdays.length||weekdays.includes(r.weekday))&&(!f.mode||r.mode===f.mode)&&(!modes.length||modes.includes(r.mode)));
 }
 export const sum=(a,key)=>a.reduce((s,r)=>s+(typeof key==='function'?key(r):r[key]||0),0);
@@ -148,60 +148,88 @@ export function calculateOrder(item,input={},settings={}){
  return {item,end,coverage,demand,stock,transit:transit||0,available,missing,suggested,quantity,blocked:reasons.length>0,reason:reasons.join(' · ')};
 }
 
-export function cycleMinutes(volume){
- const value=Number(volume);if(!Number.isFinite(value)||value<0)return null;
- if(value<=10)return 30;if(value<=25)return 20;if(value<=35)return 12;return 8;
-}
 export function peakHour(d,f={}){
- const weeks=Array.isArray(f.weeks)?f.weeks.filter(Boolean):[],explicitPeriod=!!f.week||weeks.length>0||!!f.from;
- const extentFacts=filterFacts(d.salesFacts,{store:f.store,week:f.week,weeks,from:f.from,to:f.to}),extent=dateExtent(extentFacts),to=f.to||extent.to;
- const lower=!explicitPeriod&&to?new Date(dateParts(to).dayMs-20*DAY_MS).toISOString().slice(0,10):(f.from||'');
- const periodFilter={...f,from:lower,to},observedFacts=filterFacts(d.salesFacts,{...periodFilter,mode:'',modes:[]}),facts=filterFacts(d.salesFacts,periodFilter),transactions=new Map();
+ const facts=filterFacts(d.salesFacts,f),transactions=new Map();
  for(const r of facts){const tx=transactions.get(r.transactionKey);if(!tx||r.ms<tx.ms)transactions.set(r.transactionKey,r);}
- const days=[...new Set(observedFacts.map(r=>r.dateKey))].sort(),dates=new Map(days.map(day=>[day,Array(48).fill(0)]));
- for(const tx of transactions.values()){if(dates.has(tx.dateKey))dates.get(tx.dateKey)[tx.slot]++;}
- const total=transactions.size;
+ const dates=new Map();for(const tx of transactions.values()){if(!dates.has(tx.dateKey))dates.set(tx.dateKey,Array(48).fill(0));dates.get(tx.dateKey)[tx.slot]++;}
+ const days=[...dates.keys()],total=transactions.size;
  const slots=Array.from({length:48},(_,i)=>({slot:i,label:clock(i),total:sum([...dates.values()],r=>r[i]),average:days.length?sum([...dates.values()],r=>r[i])/days.length:null,weekday:DAY_LABELS.map((_,w)=>{const ds=days.filter(day=>dateParts(day).weekday===w);return ds.length?sum(ds,day=>dates.get(day)[i])/ds.length:null;})}));
- function peak(start,end,weekday=null,selectedDays=days){
-  const ds=selectedDays.filter(day=>weekday===null||dateParts(day).weekday===weekday);let best=null;
-  for(let i=start;i<=end-4;i++){const count=sum(ds,day=>sum(dates.get(day).slice(i,i+4),x=>x));if(count>0&&(!best||count>best.total)){const halfHours=Array.from({length:4},(_,offset)=>sum(ds,day=>dates.get(day)[i+offset])/ds.length),halfHourMax=Math.max(...halfHours),frequency=cycleMinutes(halfHourMax);best={slot:i,label:`${clock(i)} - ${clock(i+4)}`,total:count,average:count/ds.length,days:ds.length,halfHours,halfHourMax,cycleMinutes:frequency,cycles:frequency?Math.ceil(120/frequency):null};}}
-  return best;
- }
- const weekday=DAY_LABELS.map((day,i)=>{const comparableDays=days.filter(d=>dateParts(d).weekday===i);return {day,days:comparableDays.length,am:peak(0,24,i),pm:peak(24,48,i)};});
- const comparisons=DAY_LABELS.map((day,weekdayIndex)=>{const comparableDays=days.filter(date=>dateParts(date).weekday===weekdayIndex),currentDate=comparableDays.at(-1),previousDate=comparableDays.at(-2);if(!currentDate)return null;const current={date:currentDate,am:peak(0,24,null,[currentDate]),pm:peak(24,48,null,[currentDate])},previous=previousDate?{date:previousDate,am:peak(0,24,null,[previousDate]),pm:peak(24,48,null,[previousDate])}:null;const delta=segment=>{const a=current[segment]?.total,b=previous?.[segment]?.total;if(!Number.isFinite(a)||!Number.isFinite(b))return null;return {value:a-b,percent:b>0?(a-b)/b:null};};return {day,current,previous,amDelta:delta('am'),pmDelta:delta('pm')};}).filter(Boolean);
- const range=dateExtent(observedFacts);
- return {facts,orders:total,sales:sum(facts,'total'),days:days.length,dates:days,slots,activeSlots:slots.filter(slot=>slot.total>0),am:peak(0,24),pm:peak(24,48),weekday,comparisons,windowDays:explicitPeriod?null:21,...range};
+ function peak(start,end,weekday=null){const ds=days.filter(day=>weekday===null||dateParts(day).weekday===weekday);let best=null;for(let i=start;i<=end-4;i++){const count=sum(ds,day=>sum(dates.get(day).slice(i,i+4),x=>x));if(count>0&&(!best||count>best.total))best={slot:i,label:`${clock(i)} - ${clock(i+4)}`,total:count,average:count/ds.length,days:ds.length};}return best;}
+ return {facts,orders:total,sales:sum(facts,'total'),days:days.length,slots,am:peak(0,24),pm:peak(24,48),weekday:DAY_LABELS.map((day,i)=>({day,days:days.filter(d=>dateParts(d).weekday===i).length,am:peak(0,24,i),pm:peak(24,48,i)})),...dateExtent(facts)};
 }
 
 // Size rules traced to Detalle_vaso Power Query, Reporte Normalizado_v2.
 export const SIZE_RULE={1:'Corto',2:'Alto',3:'Grande',7:'Grande',4:'Venti',8:'Venti',9:'Traveler'};
+const PREPARED_BEVERAGE_FAMILY=/espresso|frappuccino|starbucksconhielo|starbuckstea|alternativas?alcafe|cafeclasico/;
+const RTD_FAMILY=/bebidas?frias?|readytodrink|rtd|embotellad|envasad/;
+const COLD_DRINK_HINT=/(^hel|helado|iced|frozen|frapp|coldbrew|shake|refresher|dragon|acai|lemr|pink|lemonade|lath$|latteh$|crm?f$|creamf$)/;
+const NON_DRINK_NAME=/(^cf.*(?:cb|lh|sr)$|^cfpumpkin|^cfmaple|^agua|evian|aranch?iatta|aranciata|coldfoam|cremafria|bundle|bndl|contigo|bakery|pastel|crois|pancho|pavpan|salty)/;
+const FHW_NAMES=new Set(['vasovidrio','vasovidrion','tazabebidacal']);
+const HOT_RULE_OVERRIDES=new Set(['latte']);
+const lobbyChannel=mode=>normalize(mode)==='starbuckscoffee';
+
+// The product subcategory decides whether an item is a prepared beverage.
+// Name conventions only decide hot/cold after that gate, never whether an RTD
+// bottle should consume a cup.
+export function inferDrinkRule(name,product={}){
+ const key=normalize(name),raw=String(name||''),family=normalize(product.family),category=normalize(product.category);
+ if(FHW_NAMES.has(key))return {candidate:true,auto:true,explicit:true,classification:'FHW',vessel:'3_FHW',reason:'Presentación FHW explícita'};
+ if(RTD_FAMILY.test(family)||NON_DRINK_NAME.test(key))return {candidate:true,auto:true,explicit:true,classification:'No',vessel:'Na',reason:RTD_FAMILY.test(family)?'RTD / bebida envasada':'Adicional; no consume vaso'};
+ const prepared=PREPARED_BEVERAGE_FAMILY.test(family)&&(!category||/bebida/.test(category));
+ if(!prepared)return {candidate:false,auto:false,explicit:false,classification:'',vessel:'',reason:'Fuera de bebidas preparadas'};
+ const cold=COLD_DRINK_HINT.test(key)||/(^|\W)f(\W|$)/i.test(raw)||/frappuccino|starbucksconhielo/.test(family);
+ return {candidate:true,auto:true,explicit:cold||HOT_RULE_OVERRIDES.has(key),classification:'Vaso',vessel:cold?'2_Helado':'1_Caliente',reason:cold?'Nombre o subcategoría de bebida helada':'Bebida preparada sin marca Hel/F; se trata como caliente'};
+}
+
+function resolvedDrinkRule(d,name,product){
+ const stored=d.drinkRules.get(normalize(name)),inferred=inferDrinkRule(name,product);
+ if(!stored)return inferred.classification?{rule:{classification:inferred.classification,vessel:inferred.vessel},source:'Automática',reason:inferred.reason,candidate:inferred.candidate}: {rule:null,source:'Pendiente',reason:inferred.reason,candidate:inferred.candidate};
+ // Strong conventions correct stale hot/cold rows in the tbl while the Python
+ // updater writes the same correction back to the next workbook version.
+ if(inferred.auto&&inferred.explicit&&stored.classification==='Vaso'&&inferred.classification!==''&&(stored.classification!==inferred.classification||stored.vessel!==inferred.vessel))return {rule:{classification:inferred.classification,vessel:inferred.vessel},source:'Corregida',reason:inferred.reason,candidate:true,stored};
+ return {rule:stored,source:'tbl',reason:'Regla exacta cargada',candidate:true};
+}
+
 export function normalizados(d,f={}){
- const facts=filterFacts(d.salesFacts,f),drinks=[],unknown=new Map(),cream={with:0,without:0},groups=new Map();let returns=0;
- for(const r of facts){const name=itemName(d,r),rule=d.drinkRules.get(normalize(name));
+ const facts=filterFacts(d.salesFacts,f),drinks=[],pending=new Map(),inferredRows=new Map(),excludedRows=new Map(),cream={with:0,without:0},groups=new Map();let returns=0;
+ for(const r of facts){const name=itemName(d,r),product=d.productCatalog.get(r.product)||{},resolution=resolvedDrinkRule(d,name,product),rule=resolution.rule;
   const cr=d.creamRules.get(normalize(name));if(cr!==undefined&&r.adjusted>0&&!r.negative)cream[cr?'with':'without']+=r.adjusted;
   if(r.negative){if(rule)returns+=Math.abs(r.adjusted);continue;}
   if(!(r.adjusted>0))continue;
-  if(!rule){const p=d.productCatalog.get(r.product);if(p&&!/complemento|modificador/i.test(p.category)&&/bebida|espresso|frappuccino|cafe|teavana/i.test(p.category))unknown.set(name,(unknown.get(name)||0)+r.adjusted);continue;}
+  if(!rule){if(resolution.candidate){const current=pending.get(normalize(name))||{name,family:product.family||'',category:product.category||'',quantity:0,reason:resolution.reason};current.quantity+=r.adjusted;pending.set(normalize(name),current);}continue;}
+  if(rule.classification==='No'){
+   if(resolution.source!=='tbl'){const current=excludedRows.get(normalize(name))||{name,family:product.family||'',quantity:0,reason:resolution.reason};current.quantity+=r.adjusted;excludedRows.set(normalize(name),current);}
+   continue;
+  }
   if(!['Vaso','FHW'].includes(rule.classification))continue;
-  const v={...r,name,rule,size:SIZE_RULE[r.priceLevel]||'Sin tamaño',quantity:r.adjusted,count:r.adjusted};
-  drinks.push(v);if(!groups.has(r.transactionKey))groups.set(r.transactionKey,[]);groups.get(r.transactionKey).push(v);
+  const v={...r,name,product,rule,ruleSource:resolution.source,ruleReason:resolution.reason,size:SIZE_RULE[r.priceLevel]||'Sin tamaño',quantity:r.adjusted,count:r.adjusted,fhwCount:0};
+  drinks.push(v);const momentKey=`${r.transactionKey}|${r.ms}`;if(!groups.has(momentKey))groups.set(momentKey,[]);groups.get(momentKey).push(v);
+  if(resolution.source!=='tbl'){const current=inferredRows.get(normalize(name))||{name,family:product.family||'',quantity:0,classification:rule.classification,vessel:rule.vessel,source:resolution.source,reason:resolution.reason};current.quantity+=r.adjusted;inferredRows.set(normalize(name),current);}
  }
- let fhw=0;for(const group of groups.values()){
-  // Follow the source compensation order, retaining actual multiple quantities.
-  let offset=sum(group.filter(r=>r.rule.classification==='FHW'),'quantity');fhw+=offset;
-  for(const r of group.filter(r=>r.rule.classification==='Vaso').sort((a,b)=>Number(a.secDtl)-Number(b.secDtl))){const removed=Math.min(offset,r.count);r.count-=removed;offset-=removed;}
+ const fhwSources=new Map(),dateStats=new Map();let fhw=0,fhwSignals=0,fhwUnmatched=0,fhwTickets=0,lobbyBeverages=0;
+ for(const r of drinks.filter(r=>r.rule.classification==='Vaso'&&lobbyChannel(r.mode))){lobbyBeverages+=r.quantity;const stat=dateStats.get(r.dateKey)||{date:r.dateKey,weekday:r.weekday,fhw:0,beverages:0};stat.beverages+=r.quantity;dateStats.set(r.dateKey,stat);}
+ for(const group of groups.values()){
+  const markers=group.filter(r=>r.rule.classification==='FHW'&&lobbyChannel(r.mode)),eligible=group.filter(r=>r.rule.classification==='Vaso'&&lobbyChannel(r.mode)).sort((a,b)=>Number(a.secDtl)-Number(b.secDtl));
+  let offset=sum(markers,'quantity');if(offset>0)fhwTickets++;
+  for(const marker of markers){fhwSignals+=marker.quantity;const current=fhwSources.get(marker.name)||{name:marker.name,quantity:0};current.quantity+=marker.quantity;fhwSources.set(marker.name,current);}
+  for(const r of eligible){if(!(offset>0))break;const removed=Math.min(offset,r.count);r.count-=removed;r.fhwCount+=removed;offset-=removed;fhw+=removed;const stat=dateStats.get(r.dateKey);if(stat)stat.fhw+=removed;}
+  fhwUnmatched+=offset;
  }
  const sizes=['Corto','Alto','Grande','Venti','Traveler','Sin tamaño'].map(size=>({size,hot:0,cold:0,fhw:0}));
- for(const r of drinks){const v=sizes.find(s=>s.size===r.size);if(r.rule.classification==='FHW')v.fhw+=r.quantity;else if(r.rule.vessel==='1_Caliente')v.hot+=r.count;else if(r.rule.vessel==='2_Helado')v.cold+=r.count;}
+ for(const r of drinks.filter(r=>r.rule.classification==='Vaso')){const v=sizes.find(s=>s.size===r.size);v.fhw+=r.fhwCount;if(r.rule.vessel==='1_Caliente')v.hot+=r.count;else if(r.rule.vessel==='2_Helado')v.cold+=r.count;}
+ const preparedBeverages=sum(sizes,s=>s.hot+s.cold+s.fhw);for(const s of sizes){s.total=s.hot+s.cold+s.fhw;s.share=preparedBeverages?s.total/preparedBeverages:0;s.fhwRate=s.total?s.fhw/s.total:null;}
  const policy=d.storePolicies.get(f.store),cups=[];
  for(const s of sizes){for(const temp of ['hot','cold']){const quantity=s[temp];if(!quantity)continue;const target=cupTarget(s.size,temp,policy);const woe=target?d.woeCatalog.get(normalize(target)):null;const flag=target?d.compostableCatalog.get(normalize(target)):undefined;
   const conflict=flag!==policy||(woe?.compostable!=null&&woe.compostable!==policy);
   cups.push({size:s.size,temp:temp==='hot'?'Caliente':'Helado',quantity,name:target||'Sin cruce de vaso',sap:woe?.sap||'',dia:woe?.dia||'',ready:!!woe?.sap&&!conflict&&policy!==undefined,reason:policy===undefined?'CeCo sin clasificación':!target?'Sin regla de presentación':!woe?'Sin cruce WOE':!woe.sap?'Sin SAP':conflict?'Conflicto compostable':''});
  }}
  const usage=filterFacts(d.usageFacts,{...f,mode:''}),saleDates=new Set(facts.map(x=>x.dateKey)),usageDates=new Set(usage.map(x=>x.dateKey));
- const aligned=!f.mode&&saleDates.size>0&&saleDates.size===usageDates.size&&[...saleDates].every(day=>usageDates.has(day));
+ const aligned=!f.mode&&!(f.modes||[]).length&&saleDates.size>0&&saleDates.size===usageDates.size&&[...saleDates].every(day=>usageDates.has(day));
  for(const cup of cups){const matched=usage.filter(x=>normalize(x.name)===normalize(cup.name));cup.comparable=aligned&&matched.length>0&&matched.every(x=>unitSpec(x.unit).dim==='piece');cup.actualUse=cup.comparable?sum(matched,x=>x.use*unitSpec(x.unit).multiplier):null;cup.difference=cup.actualUse===null?null:cup.actualUse-cup.quantity;}
- return {sizes:sizes.filter(s=>s.hot+s.cold+s.fhw>0),cups,cream,fhw,returns,unknown:[...unknown].map(([name,quantity])=>({name,quantity})).sort((a,b)=>b.quantity-a.quantity),drinks,...dateExtent(facts)};
+ const fhwDates=[...dateStats.values()].sort((a,b)=>a.date.localeCompare(b.date)).map(x=>({...x,rate:x.beverages?x.fhw/x.beverages:null}));
+ const fhwWeekdays=DAY_LABELS.map((day,weekday)=>{const rows=fhwDates.filter(x=>x.weekday===weekday),beverages=sum(rows,'beverages'),count=sum(rows,'fhw');return {day,days:rows.length,fhw:count,beverages,rate:beverages?count/beverages:null};});
+ const unknown=[...pending.values()].sort((a,b)=>b.quantity-a.quantity),inferred=[...inferredRows.values()].sort((a,b)=>b.quantity-a.quantity),excluded=[...excludedRows.values()].sort((a,b)=>b.quantity-a.quantity),candidateDemand=preparedBeverages+sum(unknown,'quantity'),ruleCoverage=candidateDemand?preparedBeverages/candidateDemand:null;
+ return {sizes:sizes.filter(s=>s.total>0),cups,cream,fhw,fhwSignals,fhwUnmatched,fhwTickets,fhwRate:lobbyBeverages?fhw/lobbyBeverages:null,lobbyBeverages,fhwSources:[...fhwSources.values()].sort((a,b)=>b.quantity-a.quantity),fhwDates,fhwWeekdays,returns,unknown,pending:unknown,inferred,excluded,ruleCoverage,preparedBeverages,drinks,...dateExtent(facts)};
 }
 // These are explicit inventory names in tbl_clas_compostable, not fuzzy matching.
 export function cupTarget(size,temp,policy){
@@ -267,21 +295,18 @@ export function reportFor(module,result,context={}){
   sheet('Uso por producto',['Descripción SAP','Nombre Micros','#DIA','#SAP','Unidad','Uso total','Promedio diario'],r.items.map(i=>[i.sapName,i.microsName,i.woe?.dia||'',i.woe?.sap||'',i.unit,i.totalUse,i.average]));
  }
  if(module==='order'){report.summary=[['Días observados',r.days],['Artículos bloqueados',r.excluded]];const ready=(context.orders||[]).filter(x=>!x.blocked&&x.quantity>0);sheet('Pedido',['Producto','SAP','DIA','Proveedor','Unidad WOE','Cantidad','Existencia','Tránsito','Cobertura hasta'],ready.map(x=>[x.item.name,x.item.woe.sap,x.item.woe.dia,x.item.woe.provider,x.item.woe.ump,x.quantity,x.stock,x.transit,x.end]));sheet('Base del pedido',['Producto','Base de uso','Unidad de captura','Uso diario','Días de cobertura','Demanda','Faltante'],ready.map(x=>[x.item.name,x.item.usageSource||'Uso ideal _ac',x.item.unit,x.item.minimum,x.coverage,x.demand,x.missing]));}
- if(module==='peak'){
-  const visible=value=>value===0?'':value,comparisons=r.comparisons.filter(x=>x.previous),cycleRows=[['AM',r.am],['PM',r.pm]].map(([name,value])=>[name,value?.label||'Sin demanda',value?.halfHourMax??null,value?.cycleMinutes?`Cada ${value.cycleMinutes} min`:'Sin dato',value?.cycles??null]);
-  report.layout='peak-hour';report.operationalHeader=true;report.peak={am:r.am,pm:r.pm,orders:r.orders,days:r.days,windowDays:r.windowDays};report.comparisons=comparisons;report.cycleRows=cycleRows;report.activeSlots=r.activeSlots;
-  report.summary=[['Órdenes',r.orders],['Días observados',r.days],['Peak AM',r.am?.label||'Sin demanda'],['Promedio AM',r.am?.average??null],['Peak PM',r.pm?.label||'Sin demanda'],['Promedio PM',r.pm?.average??null]];
-  sheet('Comparativo',['Comparable','Peak AM actual','Anterior','Cambio AM','Peak PM actual','Anterior','Cambio PM'],comparisons.map(x=>[`${x.day} ${shortDate(x.current.date)} vs ${shortDate(x.previous.date)}`,x.current.am?.total??'',x.previous.am?.total??'',x.amDelta?.value??'',x.current.pm?.total??'',x.previous.pm?.total??'',x.pmDelta?.value??'']));
-  sheet('Asistente PH',['Peak','Periodo','Máx. por 30 min','Frecuencia CS','Ciclos en 2 h'],cycleRows);
-  sheet('Foco por media hora',['Franja',...DAY_LABELS,'Promedio'],r.activeSlots.map(x=>[x.label,...x.weekday.map(visible),visible(x.average)]));
-  sheet('Promedio comparable',['Día','Comparables','Peak AM','Órdenes prom.','Peak PM','Órdenes prom.'],r.weekday.filter(x=>x.days>0).map(x=>[x.day,x.days,x.am?.label||'',x.am?.average??'',x.pm?.label||'',x.pm?.average??'']));
- }
+ if(module==='peak'){report.summary=[['Órdenes',r.orders],['Días observados',r.days],['Peak AM',r.am?.label||'Sin demanda'],['Promedio AM',r.am?.average??null],['Peak PM',r.pm?.label||'Sin demanda'],['Promedio PM',r.pm?.average??null]];sheet('Medias horas',['Franja','Órdenes totales','Promedio',...DAY_LABELS],r.slots.map(x=>[x.label,x.total,x.average,...x.weekday]));sheet('Días comparables',['Día','Días','Peak AM','Promedio AM','Peak PM','Promedio PM'],r.weekday.map(x=>[x.day,x.days,x.am?.label||'',x.am?.average??null,x.pm?.label||'',x.pm?.average??null]));}
  if(module==='normal'){
-  report.summary=[['Bebidas en vaso',sum(r.sizes,x=>x.hot+x.cold)],['FHW (sin desechable)',r.fhw],['Devoluciones separadas',r.returns],['Productos sin regla',r.unknown.length]];
-  if(context.subtab==='Crema batida')sheet('Crema batida',['Indicación registrada','Cantidad'],[['Con crema',r.cream.with],['Sin crema',r.cream.without]]);
-  else if(context.subtab==='Vasos y tapas')sheet('Vasos',['Tamaño','Tipo','Bebidas = vasos','Uso ideal reportado','Diferencia','Artículo aplicable','SAP','Validación'],r.cups.map(x=>[x.size,x.temp,x.quantity,x.actualUse,x.difference,x.name,x.sap,x.ready?'Validado':x.reason]));
-  else sheet('Tamaños',['Tamaño','Calientes','Heladas','FHW'],r.sizes.map(x=>[x.size,x.hot,x.cold,x.fhw]));
-  if(r.unknown.length)sheet('Sin regla',['Producto','Cantidad'],r.unknown.map(x=>[x.name,x.quantity]));
+  report.summary=[['FHW %',r.fhwRate==null?'—':`${(r.fhwRate*100).toFixed(1)}%`],['FHW emparejado',r.fhw],['Bebidas Starbucks Coffee',r.lobbyBeverages],['Cobertura del motor',r.ruleCoverage==null?'—':`${(r.ruleCoverage*100).toFixed(1)}%`]];
+  if(context.subtab==='Crema batida')sheet('Crema batida',['Indicación registrada','Cantidad','Participación'],[['Con crema',r.cream.with,r.cream.with+r.cream.without?r.cream.with/(r.cream.with+r.cream.without):null],['Sin crema',r.cream.without,r.cream.with+r.cream.without?r.cream.without/(r.cream.with+r.cream.without):null]]);
+  else if(context.subtab==='Vasos y tapas')sheet('Vasos',['Tamaño','Tipo','Vasos previstos','Uso ideal reportado','Diferencia','Artículo aplicable','SAP','Validación'],r.cups.map(x=>[x.size,x.temp,x.quantity,x.actualUse,x.difference,x.name,x.sap,x.ready?'Validado':x.reason]));
+  else if(context.subtab==='FHW'){
+   sheet('FHW comparable',['Día','Días observados','FHW','Bebidas Starbucks Coffee','FHW %'],r.fhwWeekdays.filter(x=>x.days>0).map(x=>[x.day,x.days,x.fhw,x.beverages,x.rate]));
+   sheet('Presentaciones FHW',['Presentación','Cantidad detectada'],r.fhwSources.map(x=>[x.name,x.quantity]));
+  }else sheet('Presentaciones',['Tamaño','Calientes','Heladas','FHW','Total preparado','Participación'],r.sizes.map(x=>[x.size,x.hot,x.cold,x.fhw,x.total,x.share]));
+  if(r.pending.length)sheet('Reglas pendientes',['Producto','Subcategoría','Cantidad','Lectura'],r.pending.map(x=>[x.name,x.family||x.category,x.quantity,x.reason]));
+  if(r.inferred.length)sheet('Reglas automáticas',['Producto','Subcategoría','Clasificación','Vaso','Cantidad','Criterio'],r.inferred.map(x=>[x.name,x.family,x.classification,x.vessel,x.quantity,x.reason]));
+  if(r.excluded.length)sheet('Sin consumo de vaso',['Producto','Subcategoría','Cantidad','Motivo'],r.excluded.map(x=>[x.name,x.family,x.quantity,x.reason]));
  }
  if(module==='top'){report.summary=[['Unidades netas',r.units],['Venta',r.sales]];sheet(context.subtab||'Ranking',['Producto','Unidades','Participación',...DAY_LABELS,'Venta'],r.items.map(x=>[x.name,x.units,x.share,...x.weekday,x.sales]));}
  if(module==='baking'){report.period=shortDate(r.date);report.summary=[['Día comparable',r.weekday],['Días de referencia',r.days],['Desde',clock(r.slot)],['Referencia',r.dates?.map(shortDate).join(', ')||'Sin historial']];sheet('Previsión',['Producto','Previsto restante','Ya horneado','Por hornear','Capacidad por charola','Horneo','Temperatura'],r.items.map(x=>[x.product,x.forecast,x.stock,x.need,x.maxTray,x.bake,x.temperature]));sheet('Tandas',['Grupo','Productos','Piezas','Charolas combinadas'],r.groups.map(x=>[x.name,x.products.join(', '),x.need,x.trays]));}

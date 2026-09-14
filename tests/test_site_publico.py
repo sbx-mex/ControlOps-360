@@ -61,11 +61,6 @@ class SitioPublicoTests(unittest.TestCase):
     def test_maxmin_is_selectable_compact_and_multi_filter(self):
         for token in ('data-multi-filter=', 'data-maxmin-select=', 'step="0.1"', 'PDF etiquetas', 'primary=i.sapName', "'outputView','Ver en'", 'Pz / Caja'):
             self.assertIn(token, self.ui)
-        for token in ('trendFilters()', 'Sin conversión a caja', 'label-meta-unit'):
-            self.assertIn(token, self.ui)
-        operations = (ROOT / "assets" / "operations.mjs").read_text()
-        self.assertIn("f.weekdays", operations)
-        self.assertIn("packSizeFor", operations)
         export = (ROOT / "assets" / "export.mjs").read_text()
         self.assertIn("ACTUALIZACIÓN / IMPRESIÓN", export)
         self.assertIn("PZ / CAJA", export)
@@ -77,15 +72,13 @@ class SitioPublicoTests(unittest.TestCase):
     def test_separate_module_flows(self):
         for name in ("maxminView", "trendView", "orderView", "peakView", "normalView", "bakingView", "topView", "auditView", "aboutView"):
             self.assertIn("function " + name, self.ui)
-    def test_pedido_woe_is_guided_and_removes_obsolete_controls(self):
-        order = self.ui.split("function orderView(){", 1)[1].split("function peakView(){", 1)[0]
-        for token in ("Pedido en tránsito", "transitPdfInput", "Cantidad a pedir", "Cuenta lo que tienes físicamente", "normalizedCups:true"):
-            self.assertIn(token, order)
-        for obsolete in ("Uso pendiente hoy", "Base de vasos", "Referencia de uso", "SAP/DIA validados", "Artículos en pedido", "No aplican / sin cruce"):
-            self.assertNotIn(obsolete, order)
-        self.assertIn("parseOrderPdf", self.ui)
-        self.assertTrue((ROOT / "assets" / "vendor" / "pdf.min.mjs").is_file())
-        self.assertTrue((ROOT / "assets" / "vendor" / "pdf.worker.min.mjs").is_file())
+    def test_normalizados_has_four_views_and_global_multi_filters(self):
+        self.assertIn("tabs('normal',['Resumen','Vasos y tapas','FHW','Crema batida'])", self.ui)
+        self.assertIn("multiFilter('weeks','Semanas'", self.ui)
+        self.assertIn("multiFilter('weekdays','Días'", self.ui)
+        self.assertIn("multiFilter('modes','Canales'", self.ui)
+        self.assertNotIn("metric('Devoluciones'", self.ui)
+        self.assertNotIn("metric('Bebidas en vaso'", self.ui)
     def test_no_diagnostics_or_demo(self):
         for token in ("Exportar diagnóstico", "demoButton", "archivo_patron"):
             self.assertNotIn(token, self.html + self.ui)

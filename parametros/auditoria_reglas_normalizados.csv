@@ -1,0 +1,55 @@
+﻿Accion,CatDescripcion,DescripcionFam,Descripcion,CodigoDIA,Cantidad,NivelPrecio,Tamaño dominante,Tamaños observados,Normalizado actual,Vaso actual,Normalizado propuesto,Vaso propuesto,Confianza,Método,Similar a,Aplicado
+Correccion,Bebidas,Espresso Tradicional,Latte,,696.0,"3, 4, 2, 7, 8, 1",Grande,"Grande, Venti, Alto, Corto",Vaso,2_Helado,Vaso,1_Caliente,100.0%,Sin marca Hel/F: bebida caliente,Latte,Si
+Alta,Bebidas,Espresso Tradicional,Pumpkin Latte,,585.0,"3, 4, 2, 8, 7",Grande,"Grande, Venti, Alto",,,Vaso,1_Caliente,95.0%,Sin marca Hel/F: bebida caliente,Latte,Si
+Alta,Bebidas,Starbucks Con Hielo,Hel PumpkinLatte,,296.0,"3, 4, 2, 7, 8",Grande,"Grande, Venti, Alto",,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Hel CaramelLatte,Si
+Alta,Bebidas,Frappuccino Cafe,Pumpkin F,,234.0,"3, 4, 2, 8, 7",Grande,"Grande, Venti, Alto",,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Cappuccino,Si
+Alta,Bebidas,Starbucks Tea,H Chai PumpkinCF,,131.0,"4, 3, 2",Venti,"Venti, Grande, Alto",,,Vaso,1_Caliente,95.0%,Sin marca Hel/F: bebida caliente,Chai Cream F,Si
+Alta,Bebidas,Starbucks Con Hielo,NuezPcanaCr LatH,,120.0,"4, 3, 2, 8, 7",Venti,"Venti, Grande, Alto",,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Cinnam D Latte H,Si
+Alta,Bebidas,Espresso Tradicional,NuezPcanaCrLatte,,88.0,"3, 4, 2, 7, 8",Grande,"Grande, Venti, Alto",,,Vaso,1_Caliente,95.0%,Sin marca Hel/F: bebida caliente,Cajeta Latte,Si
+Alta,Bebidas,Starbucks Con Hielo,CF Pumpkin CB,,61.0,"3, 4, 2",Grande,"Grande, Venti, Alto",,,No,Na,99.0%,Adicional que no consume vaso,Hel CF Cappuccin,Si
+Alta,Bebidas,Frappuccino Crema,Pumpkin Cream F,,44.0,"4, 3, 7, 2, 8",Venti,"Venti, Grande, Alto",,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Cookies Cream F,Si
+Alta,Bebidas,Bebidas Frias,CasaAgua Gasific,,43.0,1,Corto,Corto,,,No,Na,99.0%,RTD / envasada,Cajeta F,Si
+Alta,Bebidas,Bebidas Frias,Agua Evian,,39.0,1,Corto,Corto,,,No,Na,99.0%,RTD / envasada,Aerocano,Si
+Alta,Bebidas,Espresso Tradicional,CaraMacchiatSRUs,,36.0,"2, 4, 3, 7",Alto,"Alto, Venti, Grande",,,Vaso,1_Caliente,95.0%,Sin marca Hel/F: bebida caliente,Caramel Macchiat,Si
+Alta,Bebidas,Bebidas Frias,Aranchiatta,,23.0,1,Corto,Corto,,,No,Na,99.0%,RTD / envasada,Caramel Macchiat,Si
+Alta,Bebidas,Bebidas Frias,CasaAgua Natural,,21.0,1,Corto,Corto,,,No,Na,99.0%,RTD / envasada,Caramel F,Si
+Alta,Bebidas,Bebidas Frias,Agua Coco,,18.0,1,Corto,Corto,,,No,Na,99.0%,RTD / envasada,Aerocano,Si
+Alta,Bebidas,Frappuccino Cafe,Caramel F VT,,18.0,8,Venti,Venti,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Caramel F,Si
+Alta,Bebidas,Espresso Tradicional,Pumpkin Latte SR,,15.0,"3, 4, 7, 8, 2",Grande,"Grande, Venti, Alto",,,Vaso,1_Caliente,95.0%,Sin marca Hel/F: bebida caliente,Latte,Si
+Alta,Bebidas,Starbucks Con Hielo,HelCaraMaccSRUs,,14.0,"3, 2, 4",Grande,"Grande, Alto, Venti",,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,HelCaramLatSRUs,Si
+Alta,Bebidas,Espresso Tradicional,Caramel Macch VT,,10.0,8,Venti,Venti,,,Vaso,1_Caliente,95.0%,Sin marca Hel/F: bebida caliente,Caramel Macchiat,Si
+Alta,Bebidas,Starbucks Con Hielo,Hel Caram Mac VT,,10.0,8,Venti,Venti,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Hel Caramel Macc,Si
+Alta,Bebidas,Frappuccino Crema,Berry Y Fr ST 26,,9.0,8,Venti,Venti,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Berry Yog Fra,Si
+Alta,Bebidas,Frappuccino Cafe,Chip F VT,,9.0,8,Venti,Venti,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Chip F,Si
+Alta,Bebidas,Starbucks Con Hielo,HelPumpk LatteSR,,7.0,"4, 3, 7",Venti,"Venti, Grande",,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,HeladoLatteSRUs,Si
+Alta,Bebidas,Bebidas Frias,Juice MVP,,7.0,1,Corto,Corto,,,No,Na,99.0%,RTD / envasada,Chai Cream F,Si
+Alta,Bebidas,Frappuccino Cafe,Cafe F ST2,,6.0,"4, 7, 3, 2",Venti,"Venti, Grande, Alto",,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Cafe F 49ST,Si
+Alta,Bebidas,Starbucks Con Hielo,HelLatteMaccSRUs,,5.0,"4, 3, 2",Venti,"Venti, Grande, Alto",,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Hel LatteMacchia,Si
+Alta,Bebidas,Bebidas Frias,Juice BabyB,,5.0,1,Corto,Corto,,,No,Na,99.0%,RTD / envasada,Chai Cream F,Si
+Alta,Bebidas,Starbucks Tea,Shaken Black Tea,,4.0,"8, 3",Venti,"Venti, Grande",,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Shaken Hibis Tea,Si
+Alta,Bebidas,Cafe Clasico,COD Colombia N,,3.0,3,Grande,Grande,,,Vaso,1_Caliente,95.0%,Sin marca Hel/F: bebida caliente,COD Chiapas,Si
+Alta,Bebidas,Espresso Tradicional,Shake Esp Ave VT,,3.0,8,Venti,Venti,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Shaken Esp Ave,Si
+Alta,Bebidas,Espresso Tradicional,ShakenEspBrownSr,,3.0,"4, 3",Venti,"Venti, Grande",,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Shaken Esp Brown,Si
+Alta,Bebidas,Bebidas Frias,EvianGasif,,2.0,1,Corto,Corto,,,No,Na,99.0%,RTD / envasada,Hel Vai Lavanda,Si
+Alta,Bebidas,Frappuccino Crema,Frapp Moments,,2.0,"7, 8",Grande,"Grande, Venti",,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Matcha Tea Frapp,Si
+Alta,Bebidas,Frappuccino Crema,Frsa Crm F ST 26,,2.0,8,Venti,Venti,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Fresa Cream F,Si
+Alta,Bebidas,Starbucks Tea,HChaiPumpkinCFSR,,2.0,"4, 3",Venti,"Venti, Grande",,,Vaso,1_Caliente,95.0%,Sin marca Hel/F: bebida caliente,Hel ChaiLatt PRO,Si
+Alta,Bebidas,Frappuccino Cafe,Mocha F ST 26,,2.0,8,Venti,Venti,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Mocha F ST2,Si
+Alta,Bebidas,Espresso Tradicional,Shaken Esp Toast,,2.0,"3, 2",Grande,"Grande, Alto",,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Shaken Esp Ave,Si
+Alta,Bebidas,Espresso Tradicional,ShakenEspMoBSRUs,,2.0,"4, 2",Venti,"Venti, Alto",,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,ShakenEspMocSRUs,Si
+Alta,Bebidas,Starbucks Tea,Summer Favs,,2.0,8,Venti,Venti,,,Vaso,1_Caliente,95.0%,Sin marca Hel/F: bebida caliente,Hibiscus,Si
+Alta,Bebidas,Frappuccino Cafe,Caramel F ST 26,,1.0,8,Venti,Venti,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Caramel F ST2,Si
+Alta,Bebidas,Frappuccino Crema,Charlie F,,1.0,4,Venti,Venti,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Chai Cream F,Si
+Alta,Bebidas,Frappuccino Cafe,Chip F ST 26,,1.0,8,Venti,Venti,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Chip F,Si
+Alta,Bebidas,Frappuccino Crema,Choco MexF ST 26,,1.0,8,Venti,Venti,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Choco Mexicano F,Si
+Alta,Bebidas,Frappuccino Cafe,ChocoBco F ST 26,,1.0,8,Venti,Venti,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Choco Blanco F,Si
+Alta,Bebidas,Espresso,Esp C/Pana Doppi,,1.0,1,Corto,Corto,,,Vaso,1_Caliente,95.0%,Sin marca Hel/F: bebida caliente,Esp C/Pana Solo,Si
+Alta,Bebidas,Starbucks Tea,Hel Chamomile,,1.0,3,Grande,Grande,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Chamomile,Si
+Alta,Bebidas,Starbucks Tea,Latte Cal Cham,,1.0,4,Venti,Venti,,,Vaso,1_Caliente,95.0%,Sin marca Hel/F: bebida caliente,Latte Cal Mint,Si
+Alta,Bebidas,Frappuccino Crema,Linus F,,1.0,3,Grande,Grande,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,HelVainiSFSRUs,Si
+Alta,Bebidas,Frappuccino Cafe,Mocha BcoF ST 26,,1.0,8,Venti,Venti,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Mocha F ST2,Si
+Alta,Bebidas,Frappuccino Crema,Pumpkin Crm F SR,,1.0,2,Alto,Alto,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,MB Lavanda Crm F,Si
+Alta,Bebidas,Bebidas Frias,Shot MagicR,,1.0,1,Corto,Corto,,,No,Na,99.0%,RTD / envasada,Chai Cream F,Si
+Alta,Bebidas,Frappuccino Cafe,Ube Coco Frap,,1.0,3,Grande,Grande,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Molten Choco F,Si
+Alta,Bebidas,Espresso Tradicional,Ube Coco Latte,,1.0,4,Venti,Venti,,,Vaso,1_Caliente,95.0%,Sin marca Hel/F: bebida caliente,Latte,Si
+Alta,Bebidas,Frappuccino Cafe,Vainilla F ST 26,,1.0,8,Venti,Venti,,,Vaso,2_Helado,97.0%,Hel/LatH/F o subcategoría helada,Vainilla Frapp,Si
