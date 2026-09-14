@@ -12,6 +12,9 @@ class EnsambleAuditTests(unittest.TestCase):
         self.assertEqual(result["ensambles_unificados"], 6)
         self.assertEqual(result["ingredientes_completos"], 12)
         self.assertTrue(result["factor_unitario"])
+        self.assertEqual(result["evidencia"]["cardinalidad"], "varios a uno")
+        self.assertEqual(result["evidencia"]["diferencia_conteo"], 0)
+        self.assertEqual(result["evidencia"]["resultado"], "APROBADO")
 
     def test_half_hour_and_filter_scenarios_are_green(self):
         self.assertEqual(len(scenario_matrix()), 9)

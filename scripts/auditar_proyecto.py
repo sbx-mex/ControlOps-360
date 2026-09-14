@@ -18,11 +18,13 @@ try:
     from .auditar_ensamble import audit_table as audit_assembly_table
     from .auditar_pedido_woe import audit_catalog as audit_woe_catalog
     from .auditar_pedido_woe import audit_interface as audit_woe_interface
+    from .auditar_rendimiento import audit as audit_performance
 except ImportError:  # Ejecución directa: python scripts/auditar_proyecto.py
     from auditar_ensamble import audit_interface as audit_assembly_interface
     from auditar_ensamble import audit_table as audit_assembly_table
     from auditar_pedido_woe import audit_catalog as audit_woe_catalog
     from auditar_pedido_woe import audit_interface as audit_woe_interface
+    from auditar_rendimiento import audit as audit_performance
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +50,7 @@ REQUIRED_FILES = {
     "assets/styles.css",
     "assets/transit.mjs",
     "scripts/auditar_proyecto.py",
+    "scripts/auditar_rendimiento.py",
     "scripts/crear_zip_seguro.py",
 }
 LEGACY_DOCS = {
@@ -151,6 +154,9 @@ def audit_integration(root: Path = ROOT) -> dict[str, object]:
     visible_surface = index + "\n" + ui
     if not all(token in visible_surface for token in visible_contract):
         raise AuditError("Identidad, confidencialidad o proyectos conectados incompletos.")
+    management_contract = ("Resumen 360°", "function financeView()", "function scopeView()", "function sourcesView()", "Mismo CeCo, tipo y periodo", "loadParameters", "loadReader", "loadExporter")
+    if not all(token in visible_surface for token in management_contract):
+        raise AuditError("Experiencia gerencial, trazabilidad o carga diferida incompleta.")
     export_contract = ("CONFIDENCIAL · USO OPERATIVO INTERNO", "Diseñador por Jorge Alcantar Aguiar", "Enrique César Flores", "headerFooter")
     if not all(token in export for token in export_contract):
         raise AuditError("El pie de exportación no está unificado.")
@@ -178,6 +184,7 @@ def audit_project(root: Path = ROOT) -> dict[str, object]:
         "seguridad": audit_security(root),
         "integracion_360": audit_integration(root),
         "cruces": audit_crosses(root),
+        "rendimiento": audit_performance(root),
     }
 
 

@@ -2,13 +2,18 @@
 
 Multiherramienta operativa de Starbucks que procesa motores Excel en el navegador, valida sus cruces y activa únicamente las herramientas compatibles con la tienda.
 
-## Qué integra la versión 6
+## Qué integra la versión 6.1
 
+- Gestión: Resumen 360°, Finanzas, Alcance y calidad, y Fuentes cargadas con vigencia y cobertura explícitas.
 - Inventario: Max & Min, Tendencia de uso y Pedido WOE con tránsito PDF local.
 - Operación: Peak Hour, Normalizados, Ensamble, Horneo, Top y Esfuerzo Operativo.
 - Control: Auditoría de Voids por ticket, partner, puesto, motivo y riesgo vinculado.
 - Exportación: Excel y PDF del módulo activo, con pie de confidencialidad uniforme.
 - Navegación: herramientas agrupadas, centro de mando y accesos visuales a [Code Brew](https://sbx-mex.github.io/CodeBrew_Merch/) y [Lay Out 2.0](https://sbx-mex.github.io/Lay-Out_2.0/).
+
+Cada Motor operativo debe identificar un único CeCo. La selección sólo compara archivos equivalentes por `CeCo + tipo + periodo`; conserva la versión más reciente, mantiene periodos distintos y explica todo archivo omitido. Un Motor inválido no detiene los módulos respaldados por otras fuentes.
+
+Los módulos de parámetros, lectura Excel, exportación y tránsito se cargan bajo demanda. La puerta Python mide el grafo inicial y evita que una actualización vuelva a cargar esos componentes antes de necesitarlos.
 
 Los parámetros de referencia están versionados en `assets/parameters.mjs`. El repositorio y el ZIP no contienen ventas, inventarios, transacciones ni libros operativos.
 
@@ -19,6 +24,7 @@ Python valida estructura, seguridad, tablas de cruce, interfaz, exportaciones y 
 ```bash
 python -m unittest discover -s tests -v
 python scripts/auditar_proyecto.py --json
+python scripts/auditar_rendimiento.py --json
 node --test tests/*.test.mjs
 node tests/generar_exportacion_max_min.mjs /tmp/max_min_validacion.xlsx
 python scripts/validar_exportacion_max_min.py /tmp/max_min_validacion.xlsx
@@ -27,8 +33,8 @@ python scripts/validar_exportacion_max_min.py /tmp/max_min_validacion.xlsx
 El ZIP reproducible se crea y se vuelve a auditar con:
 
 ```bash
-python scripts/crear_zip_seguro.py /tmp/ControlOps-360-v6.0.0.zip
-python scripts/auditar_proyecto.py --zip /tmp/ControlOps-360-v6.0.0.zip --json
+python scripts/crear_zip_seguro.py /tmp/ControlOps-360-v6.1.0.zip
+python scripts/auditar_proyecto.py --zip /tmp/ControlOps-360-v6.1.0.zip --json
 ```
 
 Para revisar la interfaz localmente:

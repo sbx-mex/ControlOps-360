@@ -75,6 +75,8 @@ export class ZipWorkbook {
 
 let crcTable;
 function crc32(bytes){if(!crcTable){crcTable=new Uint32Array(256);for(let i=0;i<256;i++){let c=i;for(let bit=0;bit<8;bit++)c=c&1?0xedb88320^(c>>>1):c>>>1;crcTable[i]=c;}}let crc=0xffffffff;for(const byte of bytes)crc=crcTable[(crc^byte)&255]^(crc>>>8);return (crc^0xffffffff)>>>0;}
+const workbookCache=new Map();
+function remember(key,record){workbookCache.set(key,structuredClone(record));if(workbookCache.size>8)workbookCache.delete(workbookCache.keys().next().value);}
 
 function parseXml(text, label) {
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw new Error("XML con entidades no permitido.");
@@ -224,9 +226,11 @@ export async function inspectWorkbook(file, progress=()=>{}) {
  const macro=/\.xlsm$/i.test(file.name),parameter=/\.xlsx$/i.test(file.name);
  if(!macro&&!parameter)throw new Error("Usa XLSM o un parámetro XLSX.");
  if(file.size>MAX_FILE_BYTES)throw new Error("El archivo supera 100 MB.");
- const buffer=await file.arrayBuffer(),fingerprintPromise=sha256(buffer),zip=new ZipWorkbook(buffer);
+ const buffer=await file.arrayBuffer(),fingerprint=await sha256(buffer),cacheKey=`${fingerprint}|${file.name}`;
+ if(workbookCache.has(cacheKey))return {...structuredClone(workbookCache.get(cacheKey)),lastModified:Number(file.lastModified)||0,cached:true};
+ const zip=new ZipWorkbook(buffer);
  if(!zip.has("xl/workbook.xml")||!zip.has("xl/_rels/workbook.xml.rels")||(macro&&!zip.has("xl/vbaProject.bin")))throw new Error("El libro no es válido.");
- const [sheets,strings,fingerprint]=await Promise.all([workbookSheets(zip),sharedStrings(zip),fingerprintPromise]);
+ const [sheets,strings]=await Promise.all([workbookSheets(zip),sharedStrings(zip)]);
  const candidates=await tableCandidates(zip,sheets,strings);
  const allowed=macro?[...FACT_TYPES,...Object.keys(CATALOG_FIELDS)]:["woe","sapList","microsList","baking","storePolicy","compostable","food","drink","cream"];
  if(!candidates.some(c=>c.roles.some(r=>macro?FACT_TYPES.includes(r):allowed.includes(r))))throw new Error(parameter ? "El XLSX no es un parámetro compatible." : "No contiene tablas operativas compatibles.");
@@ -247,5 +251,5 @@ export async function inspectWorkbook(file, progress=()=>{}) {
   sources.push({sheet:candidate.sheetName,roles,rows});
  }
  if(macro&&!local.sourceRows)throw new Error("No hay datos _ac actualizados en este motor.");
- return {dataset:local,name:file.name,fingerprint,sources,lastModified:Number(file.lastModified)||0};
+ const record={dataset:local,name:file.name,fingerprint,sources,lastModified:Number(file.lastModified)||0,cached:false};remember(cacheKey,record);return record;
 }

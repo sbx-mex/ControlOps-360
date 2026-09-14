@@ -93,8 +93,15 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertIn('id="confirmation"', self.html)
         self.assertIn("selectRecentWorkbooks", self.ui)
         self.assertIn("Promise.all", self.ui)
-        self.assertIn("fecha interna más reciente", self.ui)
+        self.assertIn("Mismo CeCo, tipo y periodo", self.ui)
         self.assertIn("Compostable:", self.ui)
+    def test_management_navigation_and_lazy_heavy_modules(self):
+        for token in ("Resumen 360°", "function financeView()", "function scopeView()", "function sourcesView()", "← Resumen"):
+            self.assertIn(token, self.html + self.ui)
+        first_lines = "\n".join(self.ui.splitlines()[:2])
+        for module in ("parameters.mjs", "reader.mjs", "export.mjs", "transit.mjs"):
+            self.assertNotIn(f"from './{module}'", first_lines)
+            self.assertIn(f"import('./{module}')", self.ui)
     def test_import_graph_is_self_contained(self):
         for p in (ROOT / "assets").glob("*"):
             if p.suffix not in (".mjs", ".js"):

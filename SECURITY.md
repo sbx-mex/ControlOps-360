@@ -9,7 +9,8 @@ Control Ops 360° opera con privacidad desde diseño: los Excel y PDF se leen de
 - GitHub Actions fijadas a commits completos y con permisos de sólo lectura.
 - Límites de cantidad y tamaño antes de leer Excel o PDF.
 - Cruce de CeCo, SAP y DIA con bloqueo ante contradicciones.
-- Selección automática del motor con fecha interna y cobertura más recientes.
+- Aislamiento por CeCo y selección determinística por tipo y periodo; toda omisión queda justificada.
+- Caché acotada por SHA-256 y carga diferida de componentes pesados.
 - Exportación con validación de contenido, nombre seguro, límite de tamaño y marca confidencial.
 - ZIP determinista sin enlaces, rutas relativas inseguras, bases operativas ni archivos sensibles; cada archivo se verifica contra `ZIP_MANIFEST.sha256`.
 

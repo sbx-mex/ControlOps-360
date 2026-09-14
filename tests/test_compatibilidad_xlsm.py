@@ -1,4 +1,7 @@
 import importlib.util
+import os
+import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -25,7 +28,7 @@ def excel_column(index: int) -> str:
     return value
 
 
-def make_xlsm(path: Path, tables: list[tuple[str, str, list[str]]], macros: bool = True, first_day: date = date(2026, 8, 24)) -> None:
+def make_xlsm(path: Path, tables: list[tuple[str, str, list[str]]], macros: bool = True, first_day: date = date(2026, 8, 24), stores: tuple[int, ...] = (38368,)) -> None:
     sheets_xml = []
     workbook_rels = []
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -48,12 +51,22 @@ def make_xlsm(path: Path, tables: list[tuple[str, str, list[str]]], macros: bool
                 f'<table xmlns="{MAIN}" name="{table_name}" displayName="{table_name}" ref="A1:{end_column}11">'
                 f'<tableColumns count="{len(headers)}">{columns}</tableColumns></table>',
             )
-            date_header = next((header for header in ("FechaHora", "Fecha") if header in headers), None)
+            date_header = next((header for header in ("FechaHora", "FechaCierre", "Fecha") if header in headers), None)
             date_column = excel_column(headers.index(date_header) + 1) if date_header else "A"
-            date_rows = "".join(
-                f'<row r="{row}"><c r="{date_column}{row}" t="inlineStr"><is><t>{first_day + timedelta(days=row - 2)}</t></is></c></row>'
-                for row in range(2, 12)
-            ) if date_header else ""
+            store_header = next((header for header in ("IDTienda", "CeCo", "CC") if header in headers), None)
+            store_column = excel_column(headers.index(store_header) + 1) if store_header else ""
+            date_rows = ""
+            if date_header or store_header:
+                rows = []
+                for row in range(2, 12):
+                    cells = []
+                    if date_header:
+                        cells.append(f'<c r="{date_column}{row}" t="inlineStr"><is><t>{first_day + timedelta(days=row - 2)}</t></is></c>')
+                    if store_header and stores:
+                        store = stores[(row - 2) % len(stores)]
+                        cells.append(f'<c r="{store_column}{row}" t="inlineStr"><is><t>{store}</t></is></c>')
+                    rows.append(f'<row r="{row}">{"".join(cells)}</row>')
+                date_rows = "".join(rows)
             zf.writestr(
                 f"xl/worksheets/sheet{index}.xml",
                 f'<worksheet xmlns="{MAIN}"><sheetData>{date_rows}</sheetData></worksheet>',
@@ -129,7 +142,7 @@ class CompatibilityTests(unittest.TestCase):
             self.assertEqual(len(files), 2)
             self.assertTrue(all(MOD.inspect_xlsm(path).compatible for path in files))
 
-    def test_duplicate_motor_uses_latest_internal_date_not_filename(self):
+    def test_distinct_periods_are_preserved_in_chronological_order(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             headers = list(MOD.STRUCTURES["uso"])
@@ -139,10 +152,53 @@ class CompatibilityTests(unittest.TestCase):
             make_xlsm(new_path, [("uso_ac", "uso_ac", headers)], first_day=date(2026, 9, 1))
             old_result, new_result = MOD.inspect_xlsm(old_path), MOD.inspect_xlsm(new_path)
             selected, superseded = MOD.select_most_recent([(new_path, new_result), (old_path, old_result)])
-            self.assertEqual(selected, [new_path])
-            self.assertEqual(superseded, [old_path])
+            self.assertEqual(selected, [old_path, new_path])
+            self.assertEqual(superseded, [])
+            self.assertEqual(new_result.cecos, ["38368"])
             self.assertEqual(new_result.sources[0].latest_date, "2026-09-10")
             self.assertEqual(new_result.sources[0].observed_days, 10)
+
+    def test_equivalent_period_uses_latest_file_version(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            headers = list(MOD.STRUCTURES["uso"])
+            old_path, new_path = root / "uso-anterior.xlsm", root / "uso-vigente.xlsm"
+            make_xlsm(old_path, [("uso_ac", "uso_ac", headers)])
+            make_xlsm(new_path, [("uso_ac", "uso_ac", headers)])
+            os.utime(old_path, (1, 1)); os.utime(new_path, (2, 2))
+            old_result, new_result = MOD.inspect_xlsm(old_path), MOD.inspect_xlsm(new_path)
+            selected, superseded = MOD.select_most_recent([(old_path, old_result), (new_path, new_result)])
+            self.assertEqual(selected, [new_path])
+            self.assertEqual(superseded, [old_path])
+
+    def test_motor_without_ceco_is_blocked(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "sin-ceco.xlsm"
+            make_xlsm(path, [("uso_ac", "uso_ac", list(MOD.STRUCTURES["uso"]))], stores=())
+            result = MOD.inspect_xlsm(path)
+            self.assertFalse(result.compatible)
+            self.assertIn("CeCo", result.reason)
+
+    def test_motor_with_two_cecos_is_blocked(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "mezcla.xlsm"
+            make_xlsm(path, [("uso_ac", "uso_ac", list(MOD.STRUCTURES["uso"]))], stores=(38368, 38101))
+            result = MOD.inspect_xlsm(path)
+            self.assertFalse(result.compatible)
+            self.assertEqual(result.cecos, ["38101", "38368"])
+
+    def test_cli_blocks_a_session_with_different_cecos(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            first, second = root / "uno.xlsm", root / "dos.xlsm"
+            headers = list(MOD.STRUCTURES["uso"])
+            make_xlsm(first, [("uso_ac", "uso_ac", headers)], stores=(38368,))
+            make_xlsm(second, [("uso_ac", "uso_ac", headers)], stores=(38101,))
+            completed = subprocess.run([sys.executable, str(SCRIPT), str(first), str(second)], check=False, capture_output=True, text=True)
+            payload = json.loads(completed.stdout)
+            self.assertEqual(completed.returncode, 2)
+            self.assertFalse(payload["session_ceco_consistent"])
+            self.assertEqual(payload["selected_files"], [])
 
     def test_xlsx_is_accepted_only_as_known_parameter(self):
         with tempfile.TemporaryDirectory() as folder:

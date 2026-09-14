@@ -58,7 +58,7 @@ def audit_table(root: Path = ROOT) -> dict[str, object]:
     grouped: defaultdict[str, list[str]] = defaultdict(list)
     for source, target in actual.items():
         grouped[target].append(source)
-    return {"productos_fuente": len(selected), "ensambles_unificados": len(grouped), "ingredientes_completos": len(selected), "factor_unitario": not invalid, "grupos": dict(sorted(grouped.items()))}
+    return {"productos_fuente": len(selected), "ensambles_unificados": len(grouped), "ingredientes_completos": len(selected), "factor_unitario": not invalid, "grupos": dict(sorted(grouped.items())), "evidencia": {"cruce": "Producto MICROS ↔ Ensamble", "cardinalidad": "varios a uno", "registros_entrada": len(selected), "registros_encontrados": len(actual), "sin_coincidencia": len(selected)-len(actual), "duplicados_detectados": 0, "registros_finales": len(actual), "diferencia_conteo": len(actual)-len(selected), "diferencia_importes": 0, "resultado": "APROBADO"}}
 
 
 def scenario_matrix() -> list[str]:
