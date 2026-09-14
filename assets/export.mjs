@@ -21,18 +21,27 @@ function cellReference(column, row) {
 
 function worksheetXml(rows, options={}) {
   const width = rows.reduce((maximum, row) => Math.max(maximum, row.length), 1);
-  const formats=options.formats||[],styleFor={twoDecimal:2,oneDecimal:3,integer:4};
+  const formats=options.formats||[],tableHeaderRow=options.tableHeaderRow||1,operational=!!options.operational;
+  const styleFor=operational?{twoDecimal:8,oneDecimal:9,integer:10}:{twoDecimal:2,oneDecimal:3,integer:4};
   const sheetRows = rows.map((row, rowIndex) => {
+    const rowNumber=rowIndex+1;
     const cells = row.map((value, columnIndex) => {
-      const ref = cellReference(columnIndex, rowIndex + 1);
-      const style = rowIndex === 0 ? ' s="1"' : (typeof value === "number" ? ` s="${styleFor[formats[columnIndex]]||2}"` : "");
+      const ref = cellReference(columnIndex, rowNumber);
+      let style="";
+      if(rowNumber===tableHeaderRow)style=' s="1"';
+      else if(operational&&rowNumber===1)style=` s="${columnIndex%2===0?5:6}"`;
+      else if(rowNumber>tableHeaderRow)style=` s="${typeof value === "number" ? styleFor[formats[columnIndex]]||8 : 7}"`;
+      else if(typeof value === "number")style=` s="${styleFor[formats[columnIndex]]||2}"`;
       if (typeof value === "number" && Number.isFinite(value)) return `<c r="${ref}"${style}><v>${value}</v></c>`;
       return `<c r="${ref}" t="inlineStr"${style}><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
     }).join("");
-    return `<row r="${rowIndex + 1}">${cells}</row>`;
+    const height=rowNumber===1&&operational?' ht="25" customHeight="1"':rowNumber===tableHeaderRow?' ht="28" customHeight="1"':rowNumber<tableHeaderRow?' ht="7" customHeight="1"':'';
+    return `<row r="${rowNumber}"${height}>${cells}</row>`;
   }).join("");
-  const widths=Array.from({length:width},(_,index)=>options.widths?.[index]||Math.min(38,Math.max(10,...rows.map(row=>String(row[index]??'').length+2))));
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${widths.map((columnWidth,index) => `<col min="${index + 1}" max="${index + 1}" width="${columnWidth}" customWidth="1"/>`).join("")}</cols><sheetData>${sheetRows}</sheetData>${rows.length > 1 ? `<autoFilter ref="A1:${cellReference(width - 1, rows.length)}"/>` : ""}</worksheet>`;
+  const dataRows=rows.slice(Math.max(0,tableHeaderRow-1)),widths=Array.from({length:width},(_,index)=>options.widths?.[index]||Math.min(38,Math.max(10,...dataRows.map(row=>String(row[index]??'').length+2))));
+  const topLeft=`A${tableHeaderRow+1}`,lastCell=cellReference(width-1,rows.length),autoFilter=rows.length>tableHeaderRow?`<autoFilter ref="A${tableHeaderRow}:${lastCell}"/>`:"";
+  const printSettings=operational?'<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.35" bottom="0.35" header="0.15" footer="0.15"/><pageSetup orientation="landscape" paperSize="1" fitToWidth="1" fitToHeight="0"/>':'';
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr>${operational?'<pageSetUpPr fitToPage="1"/>':''}</sheetPr><sheetViews><sheetView workbookViewId="0"><pane ySplit="${tableHeaderRow}" topLeftCell="${topLeft}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${widths.map((columnWidth,index) => `<col min="${index + 1}" max="${index + 1}" width="${columnWidth}" customWidth="1"/>`).join("")}</cols><sheetData>${sheetRows}</sheetData>${autoFilter}${printSettings}</worksheet>`;
 }
 
 let crcTable;
@@ -106,17 +115,31 @@ function safeSheetName(value, used) {
   return name;
 }
 
+function printDate(report){
+ const source=report?.generatedAt?new Date(`${report.generatedAt}T12:00:00`):new Date();
+ return Number.isNaN(source.getTime())?'—':new Intl.DateTimeFormat('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}).format(source);
+}
+function operationalFields(report){
+ const fields=[['TIENDA',report.store||'—'],['PERIODO INI - FIN',report.period||'—']];
+ fields.push(['ACTUALIZACIÓN / IMPRESIÓN',printDate(report)]);
+ if(report.orders!=null)fields.push(['# PEDIDOS',report.orders]);
+ return fields;
+}
+
 export function createExecutiveWorkbook(report) {
  if (!report?.sheets?.length) throw new Error("Este menú no tiene datos exportables.");
- const detailSheets=report.sheets.map(s=>({...s,rows:[s.headers,...s.rows]})),sheets=report.hideSummary?detailSheets:[{name:"Resumen",rows:[[report.title,report.store],["Periodo",report.period],["Filtros",report.filters||"Todos"],...report.summary]},...detailSheets];
+ const metadata=report.operationalHeader?[operationalFields(report).flat(),[]]:[];
+ const detailSheets=report.sheets.map(s=>({...s,rows:[...metadata,s.headers,...s.rows],tableHeaderRow:metadata.length+1,operational:!!report.operationalHeader,repeatHeaderRows:metadata.length+1}));
+ const sheets=report.hideSummary?detailSheets:[{name:"Resumen",rows:[[report.title,report.store],["Periodo",report.period],["Filtros",report.filters||"Todos"],...report.summary],tableHeaderRow:1},...detailSheets];
   const used = new Set();
   sheets.forEach((sheet) => { sheet.name = safeSheetName(sheet.name, used); });
+  const definedNames=sheets.map((sheet,index)=>sheet.repeatHeaderRows?`<definedName name="_xlnm.Print_Titles" localSheetId="${index}">'${xmlEscape(sheet.name.replaceAll("'","''"))}'!$1:$${sheet.repeatHeaderRows}</definedName>`:'').join('');
   const entries = [];
   entries.push(["[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_, index) => `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}</Types>`]);
   entries.push(["_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`]);
-  entries.push(["xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((sheet, index) => `<sheet name="${xmlEscape(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")}</sheets></workbook>`]);
+  entries.push(["xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((sheet, index) => `<sheet name="${xmlEscape(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")}</sheets>${definedNames?`<definedNames>${definedNames}</definedNames>`:''}</workbook>`]);
   entries.push(["xl/_rels/workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join("")}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`]);
-  entries.push(["xl/styles.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.0"/></numFmts><fonts count="2"><font><sz val="10"/><name val="Aptos"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="10"/><name val="Aptos"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF006241"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFill="1" applyFont="1"/><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`]);
+  entries.push(["xl/styles.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.0"/></numFmts><fonts count="4"><font><sz val="10"/><name val="Aptos"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="10"/><name val="Aptos Display"/></font><font><b/><color rgb="FF006241"/><sz val="9"/><name val="Aptos"/></font><font><b/><color rgb="FF173B30"/><sz val="9"/><name val="Aptos"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF006241"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF0F5F1"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border/><border><left style="thin"><color rgb="FFD5E1DA"/></left><right style="thin"><color rgb="FFD5E1DA"/></right><top style="thin"><color rgb="FFD5E1DA"/></top><bottom style="thin"><color rgb="FFD5E1DA"/></bottom></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="11"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFill="1" applyFont="1" applyBorder="1"><alignment wrapText="1" vertical="center"/></xf><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFill="1" applyFont="1" applyBorder="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="3" fillId="3" borderId="1" xfId="0" applyFill="1" applyFont="1" applyBorder="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"><alignment wrapText="1" vertical="top"/></xf><xf numFmtId="4" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/><xf numFmtId="3" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`]);
   sheets.forEach((sheet, index) => entries.push([`xl/worksheets/sheet${index + 1}.xml`, worksheetXml(sheet.rows,sheet)]));
   return zipStore(entries);
 }
@@ -138,40 +161,52 @@ function wrap(value,width,size=9) {
   if((line+" "+word).trim().length>limit){lines.push(line);line=word;}else line=(line+" "+word).trim();
  }if(line)lines.push(line);return lines.length?lines:[""];
 }
+function clipped(value,width,size=9){
+ const source=String(value??''),limit=Math.max(3,Math.floor(width/(size*.54)));
+ return source.length<=limit?source:source.slice(0,Math.max(1,limit-1)).trimEnd()+'…';
+}
 function pdfFromPages(pages){
  const objects=["<< /Type /Catalog /Pages 2 0 R >>","", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>","<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"],kids=[];
- pages.forEach((source,i)=>{let stream=source+`\nBT /F1 7 Tf 0.3 0.4 0.3 rg 700 14 Td (Hoja ${i+1} de ${pages.length}) Tj ET`;const pageId=objects.length+1,contentId=pageId+1;kids.push(pageId+" 0 R");objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 792 612] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`);objects.push(`<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}\nendstream`);});
+ pages.forEach((source,i)=>{let stream=source+`\nBT /F1 7 Tf 0.3 0.4 0.3 rg 365 14 Td (Hoja ${i+1} de ${pages.length}) Tj ET`;const pageId=objects.length+1,contentId=pageId+1;kids.push(pageId+" 0 R");objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 792 612] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`);objects.push(`<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}\nendstream`);});
  objects[1]=`<< /Type /Pages /Kids [${kids.join(" ")}] /Count ${pages.length} >>`;
  let pdf="%PDF-1.4\n",offsets=[0];objects.forEach((obj,i)=>{offsets.push(encoder.encode(pdf).length);pdf+=`${i+1} 0 obj\n${obj}\nendobj\n`;});
  const xref=encoder.encode(pdf).length;pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;offsets.slice(1).forEach(offset=>{pdf+=String(offset).padStart(10,"0")+" 00000 n \n";});pdf+=`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;return encoder.encode(pdf);
 }
+function drawOperationalHeader(commands,text,report){
+ const fields=operationalFields(report),x=18,bottom=574,width=756,height=24,ratios=fields.length===4?[.38,.22,.25,.15]:[.45,.30,.25];
+ commands.push(`0 0.38 0.25 RG 0.75 w ${x} ${bottom} ${width} ${height} re S`);
+ let cursor=x;
+ fields.forEach(([label,value],index)=>{const sectionWidth=width*ratios[index];if(index)commands.push(`0 0.38 0.25 RG 0.5 w ${cursor} ${bottom} m ${cursor} ${bottom+height} l S`);text(cursor+6,bottom+15.5,5.2,label,true,'left','green');text(cursor+6,bottom+5.5,7.1,clipped(value,sectionWidth-12,7.1),true);cursor+=sectionWidth;});
+}
 function createLabelPdf(report){
  if(!report.cards?.length)throw new Error("Elige al menos un producto para imprimir.");
- const compact=report.cards.length>6,columns=compact?3:2,rows=compact?4:3,perPage=columns*rows,pages=[],margin=18,gapX=6,gapY=4,gridTop=558,gridBottom=26,cardW=(792-margin*2-gapX*(columns-1))/columns,cardH=(gridTop-gridBottom-gapY*(rows-1))/rows;
- for(let start=0;start<report.cards.length;start+=perPage){const commands=[],pageCards=report.cards.slice(start,start+perPage),text=(x,y,size,value,bold=false,align='left')=>{const at=align==='center'?x-String(value??'').length*size*.27:x;commands.push(`BT /F${bold?2:1} ${size} Tf 0.06 0.16 0.13 rg ${at} ${y} Td (${pdfEscape(value)}) Tj ET`);};
-  text(margin,590,12,report.title,true);text(margin,576,7.2,[report.store,report.period,report.filters].filter(Boolean).join(' · '));commands.push(`0 0.38 0.25 RG 0.8 w ${margin} 568 m ${792-margin} 568 l S`);
-  pageCards.forEach((card,index)=>{const row=Math.floor(index/columns),col=index%columns,x=margin+col*(cardW+gapX),top=gridTop-row*(cardH+gapY),bottom=top-cardH,secondary=card.name===card.sapName?card.microsName:card.sapName;
-   commands.push(`0.75 0.82 0.78 RG 0.6 w ${x} ${bottom} ${cardW} ${cardH} re S`);
-   const nameSize=compact?8.2:10;wrap(card.name,cardW-16,nameSize).slice(0,2).forEach((line,lineIndex)=>text(x+8,top-15-lineIndex*(compact?10:12),nameSize,line,true));
-   if(secondary&&secondary!==card.name)text(x+8,top-37,6.2,wrap(secondary,cardW-16,6.2)[0]);
-   text(x+8,top-48,6.2,`SAP ${card.sap||'—'} · DIA ${card.dia||'—'}${card.adjusted?' · AJUSTADO':''}`);
-   text(x+8,top-59,6.5,`PEDIDOS / SEMANA ${card.orders??'—'}`,true);
-   commands.push(`0.84 0.88 0.85 RG 0.4 w ${x+6} ${top-65} m ${x+cardW-6} ${top-65} l S`);
-   text(x+cardW*.25,top-78,7,'MIN',true,'center');text(x+cardW*.75,top-78,7,'MAX',true,'center');
-   text(x+cardW*.25,top-101,17,card.minimum==null?'—':NUMBER.format(card.minimum),true,'center');text(x+cardW*.75,top-101,17,card.maximum==null?'—':NUMBER.format(card.maximum),true,'center');
-   commands.push(`0.84 0.88 0.85 RG 0.4 w ${x+6} ${bottom+17} m ${x+cardW-6} ${bottom+17} l S`);
-   const mode=card.mode==='pack'?'PICK PACK':card.mode==='sleeve'?'MANGA':'UNIDAD',unit=String(card.unit||'').toUpperCase(),footer=card.mode==='unit'?mode:(unit||mode);text(x+8,bottom+6,6.4,`${footer} · PRIORIDAD ${card.priority}`,true);
+ const columns=3,rows=4,perPage=12,pages=[],margin=18,gapX=6,gapY=5,gridTop=566,gridBottom=27,cardW=(792-margin*2-gapX*(columns-1))/columns,cardH=(gridTop-gridBottom-gapY*(rows-1))/rows;
+ for(let start=0;start<report.cards.length;start+=perPage){const commands=[],pageCards=report.cards.slice(start,start+perPage),text=(x,y,size,value,bold=false,align='left',tone='dark')=>{const at=align==='center'?x-String(value??'').length*size*.27:x,color=tone==='green'?'0 0.38 0.25':'0.06 0.12 0.10';commands.push(`BT /F${bold?2:1} ${size} Tf ${color} rg ${at} ${y} Td (${pdfEscape(value)}) Tj ET`);};
+  drawOperationalHeader(commands,text,report);
+  pageCards.forEach((card,index)=>{const row=Math.floor(index/columns),col=index%columns,x=margin+col*(cardW+gapX),top=gridTop-row*(cardH+gapY),bottom=top-cardH,topHeight=53,footerHeight=18,bodyTop=top-topHeight,bodyBottom=bottom+footerHeight;
+   commands.push(`0.08 0.12 0.10 RG 0.85 w ${x} ${bottom} ${cardW} ${cardH} re S`);
+   wrap(card.sapName||card.name,cardW-16,8.1).slice(0,2).forEach((line,lineIndex)=>text(x+8,top-15-lineIndex*10,8.1,line,true));
+   const identity=`${card.microsName||'—'} | #DIA ${card.dia||'—'} | #SAP ${card.sap||'—'}${card.adjusted?' | AJUSTADO':''}`;
+   text(x+cardW/2,top-46,5.3,clipped(identity,cardW-16,5.3),false,'center');
+   commands.push(`0.08 0.12 0.10 RG 0.65 w ${x} ${bodyTop} m ${x+cardW} ${bodyTop} l S ${x+cardW/2} ${bodyTop} m ${x+cardW/2} ${bodyBottom} l S ${x} ${bodyBottom} m ${x+cardW} ${bodyBottom} l S`);
+   text(x+cardW*.25,bodyTop-17,7,'MIN',true,'center');text(x+cardW*.75,bodyTop-17,7,'MAX',true,'center');
+   text(x+cardW*.25,bodyBottom+14,17,card.minimum==null?'—':NUMBER.format(card.minimum),true,'center');text(x+cardW*.75,bodyBottom+14,17,card.maximum==null?'—':NUMBER.format(card.maximum),true,'center');
+   const third=cardW/3,mode=card.mode==='pack'?'PICK PACK':card.mode==='sleeve'?'MANGA':'UNIDAD',pieces=card.piecesPerCase?`${NUMBER.format(card.piecesPerCase)} PZ / CAJA`:'PZ / CAJA —';
+   commands.push(`0.75 0.82 0.78 RG 0.35 w ${x+third} ${bottom} m ${x+third} ${bodyBottom} l S ${x+third*2} ${bottom} m ${x+third*2} ${bodyBottom} l S`);
+   text(x+third*.5,bottom+6,5.8,mode,true,'center','green');text(x+third*1.5,bottom+6,5.8,clipped(pieces,third-8,5.8),false,'center');text(x+third*2.5,bottom+6,5.8,`${card.orders??'—'} PEDIDOS`,true,'center');
   });pages.push(commands.join('\n'));
  }
  return pdfFromPages(pages);
 }
 function createMaxMinListPdf(report){
  if(!report.listCards?.length)throw new Error("Elige al menos un producto para imprimir.");
- const pages=[],perPage=15,columns=[{x:28,label:'#',width:36},{x:64,label:'Producto',width:258},{x:322,label:'SAP / DIA',width:126},{x:448,label:'Pedidos',width:58},{x:506,label:'MIN',width:58},{x:564,label:'MAX',width:58},{x:622,label:'Formato',width:142}];
- for(let start=0;start<report.listCards.length;start+=perPage){const commands=[],text=(x,y,size,value,bold=false)=>commands.push(`BT /F${bold?2:1} ${size} Tf 0.06 0.16 0.13 rg ${x} ${y} Td (${pdfEscape(value)}) Tj ET`);
-  text(28,586,13,'Max & Min · Lista',true);text(28,570,7.2,[report.store,report.period,report.filters].filter(Boolean).join(' · '));commands.push('0 0.38 0.25 RG 0.8 w 28 561 m 764 561 l S');
-  commands.push('0.90 0.94 0.91 rg 28 532 736 24 re f');columns.forEach(column=>text(column.x,541,7,column.label,true));
-  report.listCards.slice(start,start+perPage).forEach((card,index)=>{const y=517-index*32,format=card.mode==='unit'?'Unidad':card.unit||'Pick Pack';text(columns[0].x,y,7,card.priority,true);wrap(card.name,columns[1].width-8,7).slice(0,2).forEach((line,lineIndex)=>text(columns[1].x,y-lineIndex*9,7,line,lineIndex===0));text(columns[2].x,y,6.6,`${card.sap||'—'} / ${card.dia||'—'}`);text(columns[3].x,y,7,card.orders,true);text(columns[4].x,y,8,card.minimum==null?'—':NUMBER.format(card.minimum),true);text(columns[5].x,y,8,card.maximum==null?'—':NUMBER.format(card.maximum),true);wrap(format,columns[6].width-6,6.5).slice(0,2).forEach((line,lineIndex)=>text(columns[6].x,y-lineIndex*8,6.5,line,lineIndex===0));commands.push(`0.87 0.90 0.88 RG 0.3 w 28 ${y-12} m 764 ${y-12} l S`);});
+ const pages=[],perPage=15,widths=[168,145,60,60,45,45,75,70,68],labels=['DESCRIPCIÓN SAP','NOMBRE MICROS','#DIA','#SAP','MIN','MAX','UNIDAD / PICK PACK','PZ / CAJA','# PEDIDO'];
+ for(let start=0;start<report.listCards.length;start+=perPage){const commands=[],text=(x,y,size,value,bold=false,align='left',tone='dark')=>{const at=align==='center'?x-String(value??'').length*size*.27:x,color=tone==='white'?'1 1 1':tone==='green'?'0 0.38 0.25':'0.06 0.12 0.10';commands.push(`BT /F${bold?2:1} ${size} Tf ${color} rg ${at} ${y} Td (${pdfEscape(value)}) Tj ET`);};
+  drawOperationalHeader(commands,text,report);text(28,551,11,'MAX & MIN · LISTA OPERATIVA',true);
+  commands.push('0 0.38 0.25 rg 28 522 736 23 re f');let headerX=28;labels.forEach((label,index)=>{text(headerX+4,530,index>5?5.2:5.8,label,true,'left','white');headerX+=widths[index];});
+  report.listCards.slice(start,start+perPage).forEach((card,index)=>{const y=507-index*31,format=card.mode==='pack'?'Pick Pack':card.mode==='sleeve'?'Manga':'Unidad',values=[card.sapName||card.name,card.microsName||'—',card.dia||'—',card.sap||'—',card.minimum==null?'—':NUMBER.format(card.minimum),card.maximum==null?'—':NUMBER.format(card.maximum),format,card.piecesPerCase?NUMBER.format(card.piecesPerCase):'—',card.orders??'—'];let cellX=28;
+   if(index%2)commands.push(`0.97 0.98 0.97 rg 28 ${y-12} 736 30 re f`);
+   values.forEach((value,columnIndex)=>{const cellWidth=widths[columnIndex],center=columnIndex>=2;text(center?cellX+cellWidth/2:cellX+4,y,6.1,clipped(value,cellWidth-8,6.1),columnIndex===0||columnIndex>=4,center?'center':'left');if(columnIndex)commands.push(`0.88 0.91 0.89 RG 0.25 w ${cellX} ${y-12} m ${cellX} ${y+18} l S`);cellX+=cellWidth;});commands.push(`0.86 0.90 0.87 RG 0.3 w 28 ${y-12} m 764 ${y-12} l S`);});
   pages.push(commands.join('\n'));
  }
  return pdfFromPages(pages);
@@ -182,7 +217,7 @@ export function createExecutivePdf(report) {
  if(report.layout==='maxmin-list')return createMaxMinListPdf(report);
  const pages=[];let commands=[],y=0;
  const text=(x,y,size,value,bold=false)=>commands.push(`BT /F${bold?2:1} ${size} Tf 0.06 0.16 0.13 rg ${x} ${y} Td (${pdfEscape(value)}) Tj ET`);
- const newPage=()=>{if(commands.length)pages.push(commands.join("\n"));commands=[];y=550;text(32,579,18,report.title,true);text(32,560,9,report.store+" · "+report.period);text(32,542,8,report.filters||"");y=522;};
+ const newPage=()=>{if(commands.length)pages.push(commands.join("\n"));commands=[];if(report.operationalHeader){const headerText=(x,at,size,value,bold=false,align='left',tone='dark')=>{const px=align==='center'?x-String(value??'').length*size*.27:x,color=tone==='green'?'0 0.38 0.25':'0.06 0.12 0.10';commands.push(`BT /F${bold?2:1} ${size} Tf ${color} rg ${px} ${at} Td (${pdfEscape(value)}) Tj ET`);};drawOperationalHeader(commands,headerText,report);text(28,550,13,report.title,true);if(report.filters)text(28,536,7,report.filters);y=516;}else{text(32,579,18,report.title,true);text(32,560,9,report.store+" · "+report.period);text(32,542,8,report.filters||"");y=522;}};
  newPage();
  for(const [key,value]of report.summary){for(const line of wrap(key+": "+(typeof value==="number"?NUMBER.format(value):value??"Sin dato"),720,10)){text(32,y,10,line);y-=16;}}
  y-=12;
@@ -203,6 +238,7 @@ export function createExecutivePdf(report) {
  for(const sheet of report.cards?[]:report.sheets){
   const count=sheet.headers.length,width=728/count,size=count>8?7.5:9;
   const header=()=>{if(y<100)newPage();text(32,y,12,sheet.name,true);y-=24;const lines=sheet.headers.map(h=>wrap(h,width-12,size)),height=Math.max(...lines.map(a=>a.length))*12+12;commands.push(`0.89 0.94 0.91 rg 32 ${y-height+12} 728 ${height} re f`);lines.forEach((a,c)=>a.forEach((v,i)=>text(38+c*width,y-i*12,size,v,true)));y-=height;};
+  if(report.operationalHeader&&y<240)newPage();
   header();
   for(const row of sheet.rows){const cells=sheet.headers.map((_,i)=>wrap(typeof row[i]==="number"?NUMBER.format(row[i]):row[i]??"—",width-12,size));const height=Math.max(...cells.map(a=>a.length))*12+10;
    if(y-height<38){newPage();header();}

@@ -11,64 +11,67 @@ from openpyxl import load_workbook
 
 
 ORDER_FACTOR = {2: 5, 3: 4, 4: 3, 5: 2}
-UNIT_HEADERS = (
-    "Prioridad", "Nombre SAP", "Código SAP", "Código DIA", "Familia",
-    "Pedidos / semana", "Uso diario", "Mínimo", "Máximo", "Unidad",
-    "Origen", "Validación",
+EXPORT_HEADERS = (
+    "Descripción SAP", "Nombre Micros", "#DIA", "#SAP", "Min", "Max",
+    "Unidad / Pick Pack", "Pz / Caja", "# Pedido",
 )
-PACK_HEADERS = (
-    "Prioridad", "Nombre SAP", "Código SAP", "Código DIA", "Familia",
-    "Pedidos / semana", "Formato", "Unidades / formato",
-    "Uso diario / formato", "Mínimo", "Máximo", "Presentación", "Validación",
-)
+META_LABELS = ("TIENDA", "PERIODO INI - FIN", "ACTUALIZACIÓN / IMPRESIÓN", "# PEDIDOS")
 
 
 def table_rows(sheet, expected_headers: tuple[str, ...]) -> list[dict[str, object]]:
     values = list(sheet.iter_rows(values_only=True))
-    if not values or tuple(values[0]) != expected_headers:
+    if len(values) < 3 or tuple(values[2][:len(expected_headers)]) != expected_headers:
         raise ValueError(f"{sheet.title}: encabezados inesperados")
-    return [dict(zip(expected_headers, row)) for row in values[1:] if any(value not in (None, "") for value in row)]
+    metadata = values[0]
+    if tuple(metadata[index] for index in (0, 2, 4, 6)) != META_LABELS:
+        raise ValueError(f"{sheet.title}: encabezado operativo incompleto")
+    if any(metadata[index] in (None, "") for index in (1, 3, 5, 7)):
+        raise ValueError(f"{sheet.title}: metadatos operativos incompletos")
+    if sheet.freeze_panes != "A4" or sheet.print_title_rows != "$1:$3":
+        raise ValueError(f"{sheet.title}: filas superiores no están fijas/repetidas")
+    if sheet.sheet_properties.pageSetUpPr.fitToPage is not True or sheet.page_setup.orientation != "landscape" or sheet.page_setup.fitToWidth != 1:
+        raise ValueError(f"{sheet.title}: configuración de impresión inesperada")
+    return [dict(zip(expected_headers, row)) for row in values[3:] if any(value not in (None, "") for value in row)]
 
 
 def validate(path: Path) -> dict[str, int]:
-    workbook = load_workbook(path, read_only=True, data_only=False)
+    workbook = load_workbook(path, read_only=False, data_only=False)
     if workbook.sheetnames != ["Uso Unidad", "Pick Pack"]:
         raise ValueError(f"Pestañas inesperadas: {workbook.sheetnames}")
 
-    unit_rows = table_rows(workbook["Uso Unidad"], UNIT_HEADERS)
-    pack_rows = table_rows(workbook["Pick Pack"], PACK_HEADERS)
-    priorities = [int(row["Prioridad"]) for row in unit_rows]
-    if priorities != sorted(set(priorities)) or any(priority < 1 for priority in priorities):
-        raise ValueError("Uso Unidad: la prioridad debe ser única, positiva y ascendente")
-    uses = [float(row["Uso diario"]) for row in unit_rows]
-    if uses != sorted(uses, reverse=True):
-        raise ValueError("Uso Unidad: los productos no están ordenados de mayor a menor uso")
+    unit_rows = table_rows(workbook["Uso Unidad"], EXPORT_HEADERS)
+    pack_rows = table_rows(workbook["Pick Pack"], EXPORT_HEADERS)
+    identities = [(row["Descripción SAP"], row["#DIA"], row["#SAP"]) for row in unit_rows]
+    if len(identities) != len(set(identities)):
+        raise ValueError("Uso Unidad: hay artículos duplicados")
 
-    unit_by_priority = {int(row["Prioridad"]): row for row in unit_rows}
+    unit_by_identity = {identity: row for identity, row in zip(identities, unit_rows)}
     for row in unit_rows:
-        orders = int(row["Pedidos / semana"])
-        minimum = float(row["Mínimo"])
-        maximum = float(row["Máximo"])
+        orders = int(row["# Pedido"])
+        minimum = float(row["Min"])
+        maximum = float(row["Max"])
         if orders not in ORDER_FACTOR or abs(maximum - minimum * ORDER_FACTOR[orders]) > 0.31:
-            raise ValueError(f"Uso Unidad: relación Max & Min inválida en prioridad {row['Prioridad']}")
+            raise ValueError(f"Uso Unidad: relación Max & Min inválida en {row['Descripción SAP']}")
+        if row["Unidad / Pick Pack"] != "Unidad":
+            raise ValueError("Uso Unidad: formato operativo inesperado")
 
-    last_priority = 0
     sleeve_rows = 0
     for row in pack_rows:
-        priority = int(row["Prioridad"])
-        if priority < last_priority or priority not in unit_by_priority:
-            raise ValueError("Pick Pack: prioridad fuera de orden")
-        last_priority = priority
-        if row["Formato"] not in {"Pick Pack", "Manga"}:
-            raise ValueError(f"Pick Pack: formato desconocido {row['Formato']}")
-        if row["Formato"] == "Manga":
+        identity = (row["Descripción SAP"], row["#DIA"], row["#SAP"])
+        if identity not in unit_by_identity:
+            raise ValueError("Pick Pack: artículo sin correspondencia en Uso Unidad")
+        if row["Unidad / Pick Pack"] not in {"Pick Pack", "Manga"}:
+            raise ValueError(f"Pick Pack: formato desconocido {row['Unidad / Pick Pack']}")
+        if row["Min"] not in (None, "") and row["Max"] not in (None, ""):
+            orders = int(row["# Pedido"])
+            minimum, maximum = int(row["Min"]), int(row["Max"])
+            if orders not in ORDER_FACTOR or maximum < minimum or maximum > minimum * ORDER_FACTOR[orders]:
+                raise ValueError(f"Pick Pack: relación Max & Min inválida en {row['Descripción SAP']}")
+        if row["Unidad / Pick Pack"] == "Manga":
             sleeve_rows += 1
-            content = int(row["Unidades / formato"])
+            content = int(row["Pz / Caja"])
             if content not in {40, 50, 100}:
                 raise ValueError(f"Manga inválida: {content} piezas")
-            expected = float(unit_by_priority[priority]["Uso diario"]) / content
-            if abs(float(row["Uso diario / formato"]) - expected) > 0.02:
-                raise ValueError(f"Manga: uso diario inválido en prioridad {priority}")
 
     return {"uso_unidad": len(unit_rows), "pick_pack": len(pack_rows), "mangas": sleeve_rows}
 
