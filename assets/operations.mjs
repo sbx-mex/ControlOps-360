@@ -1,21 +1,20 @@
 import {normalize,numberValue,DAY_LABELS,DAY_MS,dateParts,dateExtent,weekKey,shortDate,shortPeriod} from './engine.mjs';
+import {assemblyRecipe,projectedIngredients} from './assembly.mjs';
 
 export const ORDER_FACTOR={2:5,3:4,4:3,5:2};
 export const MODULES=[
  {id:'maxmin',name:'Max & Min',caption:'Uso, mínimos y tarjetas',icon:'▦',type:'usage'},
  {id:'trend',name:'Tendencia de uso',caption:'Productos y días comparables',icon:'↗',type:'usage'},
  {id:'order',name:'Pedido WOE',caption:'Cobertura, existencias y pedido',icon:'▤',type:'usage'},
- {id:'peak',name:'Peak Hour',caption:'Comparables, ciclos y medias horas',icon:'◷',type:'sales'},
+ {id:'peak',name:'Peak Hour',caption:'Todo el día, cada media hora',icon:'◷',type:'sales'},
  {id:'normal',name:'Normalizados',caption:'Tamaños, vasos y crema',icon:'◉',type:'sales'},
+ {id:'assembly',name:'Ensamble',caption:'Plan por media hora e ingredientes',icon:'◈',type:'sales'},
  {id:'baking',name:'Bitácora de horneo',caption:'Previsión y próximas tandas',icon:'♨',type:'sales'},
  {id:'top',name:'Top Bebidas & Alimentos',caption:'Ranking y mezcla semanal',icon:'≡',type:'sales'},
  {id:'audit',name:'Auditoría tienda',caption:'Órdenes negativas por revisar',icon:'◇',type:'audit'},
 ];
 export function availableModules(d){return MODULES.filter(m=>m.type==='audit'?d.sourceTypes.has('auditTicket')||d.sourceTypes.has('auditVoid'):m.type==='usage'?d.usageFacts.length:d.salesFacts.length&&(m.id==='peak'||d.productCatalog.size));}
-export function filterFacts(facts,f={}){
- const weeks=Array.isArray(f.weeks)?f.weeks.filter(Boolean):[],weekdays=Array.isArray(f.weekdays)?f.weekdays.filter(x=>x!==''&&x!=null).map(Number):[],modes=Array.isArray(f.modes)?f.modes.filter(Boolean):[];
- return facts.filter(r=>(!f.store||r.store===f.store)&&(!f.from||r.dateKey>=f.from)&&(!f.to||r.dateKey<=f.to)&&(!f.week||weekKey(r.dateKey)===f.week)&&(!weeks.length||weeks.includes(weekKey(r.dateKey)))&&(f.weekday==null||f.weekday===''||r.weekday===Number(f.weekday))&&(!weekdays.length||weekdays.includes(r.weekday))&&(!f.mode||r.mode===f.mode)&&(!modes.length||modes.includes(r.mode)));
-}
+export function filterFacts(facts,f={}){const weeks=Array.isArray(f.weeks)?f.weeks.filter(Boolean):[],weekdays=Array.isArray(f.weekdays)?f.weekdays.filter(value=>value!==''&&value!=null).map(Number):[];return facts.filter(r=>(!f.store||r.store===f.store)&&(!f.from||r.dateKey>=f.from)&&(!f.to||r.dateKey<=f.to)&&(!f.week||weekKey(r.dateKey)===f.week)&&(!weeks.length||weeks.includes(weekKey(r.dateKey)))&&(f.weekday==null||f.weekday===''||r.weekday===Number(f.weekday))&&(!weekdays.length||weekdays.includes(r.weekday))&&(!f.mode||r.mode===f.mode));}
 export const sum=(a,key)=>a.reduce((s,r)=>s+(typeof key==='function'?key(r):r[key]||0),0);
 export const clock=slot=>`${String(Math.floor(slot/2)).padStart(2,'0')}:${slot%2?'30':'00'}`;
 const epsCeil=v=>Math.ceil(v-0.00001);
@@ -125,58 +124,67 @@ export function sleeveFor(item){
  const size=paper20?40:50;
  return {kind:'Vaso',size,label:`Manga ${size} pzas`};
 }
+export function packSizeFor(item){
+ for(const value of [item?.p?.stockPack,item?.p?.woePack]){const size=Number(value);if(Number.isFinite(size)&&size>1)return size;}
+ return null;
+}
+export function resolvePresentationMode(item,mode='unit'){
+ if(mode==='sleeve'&&sleeveFor(item))return 'sleeve';
+ if(mode==='pack'&&packSizeFor(item))return 'pack';
+ return 'unit';
+}
 export function minmaxValues(item,mode='unit'){
- const sleeve=sleeveFor(item),pack=mode==='sleeve'?sleeve?.size:(item.p.stockPack||item.p.woePack);
- if(mode==='unit')return {minimum:item.minimum,maximum:item.maximum,unit:item.unit,packSize:1};
+ const sleeve=sleeveFor(item),pack=mode==='sleeve'?sleeve?.size:packSizeFor(item);
+ if(mode==='unit')return {minimum:item.minimum,maximum:item.maximum,unit:item.unit,packSize:null};
  const label=mode==='sleeve'?sleeve?.label:(item.stock?.pickPack||item.woe?.ump||'Pick Pack sin validar');
  return {minimum:pack?epsCeil(item.minimum/pack):null,maximum:pack?epsCeil(item.maximum/pack):null,unit:label||'Pick Pack sin validar',packSize:pack||null};
 }
 
 export function coverageDays(today,end,fraction=1){const a=dateParts(today),b=dateParts(end);if(!a||!b||b.dayMs<a.dayMs||!Number.isFinite(Number(fraction)))return null;const days=(b.dayMs-a.dayMs)/DAY_MS;return days===0?Math.min(0.5,Math.max(0,Number(fraction))):days-0.5+Math.min(1,Math.max(0,Number(fraction)));}
 export function nextReception(date,weekdays){const d=dateParts(date);if(!d)return null;for(let offset=1;offset<=7;offset++){const next=dateParts(new Date(d.dayMs+offset*DAY_MS).toISOString().slice(0,10));if(weekdays.includes(next.weekday))return next.dateKey;}return null;}
+export function remainingUsageToday(hour,minute=0){const captured=Number(hour)+Number(minute||0)/60;if(captured>=22)return 0;if(captured>=21)return .1;if(captured>=19)return .3;if(captured>=12)return .5;if(captured>=11)return .7;return 1;}
+const compactCode=value=>String(value??'').replace(/\D/g,'').replace(/^0+(?=\d)/,'');
+const canonicalWoeUnit=value=>{const unit=normalize(value).toUpperCase();if(['CJA','CAJA','CAJ'].includes(unit))return'CAJ';if(['UND','UN','UNIDAD','PIEZA','PIEZAS','PZA','PZ'].includes(unit))return'PZA';if(['PQT','PQTE','PAQUETE','PAQ'].includes(unit))return'PQT';if(['BOT','BOTE','BOTELLA','BTL','BTE'].includes(unit))return'BTE';if(['BOLSA','BSA','BOL'].includes(unit))return'BOL';if(['ROLLO','ROL'].includes(unit))return'ROL';if(['GALON','GAL'].includes(unit))return'GAL';if(['LITRO','LITROS','LT','L'].includes(unit))return'LT';return unit;};
+function uniqueCodeIndex(items,field){const index=new Map();for(const item of items){const code=compactCode(field(item));if(!code)continue;if(index.has(code)&&index.get(code)?.key!==item.key)index.set(code,null);else index.set(code,item);}return index;}
+export function reconcileTransit(items,orders=[]){
+ const bySap=uniqueCodeIndex(items,item=>item.woe?.sap),byDia=uniqueCodeIndex(items,item=>item.woe?.dia),byItem=new Map(),unmatched=[],conflicts=[];let matchedLines=0,matchedUnits=0;
+ for(const order of orders){for(const line of order.lines||[]){const sap=compactCode(line.sap),dia=compactCode(line.material),sapItem=sap?bySap.get(sap):null,diaItem=dia?byDia.get(dia):null;
+  if(sapItem&&diaItem&&sapItem.key!==diaItem.key){conflicts.push({order,line,reason:'SAP y DIA apuntan a artículos distintos'});continue;}
+  const item=sapItem||diaItem;if(!item){unmatched.push({order,line,reason:'Sin coincidencia SAP/DIA'});continue;}
+  const expectedSap=compactCode(item.woe?.sap),expectedDia=compactCode(item.woe?.dia);
+  if((sap&&expectedSap&&sap!==expectedSap)||(dia&&expectedDia&&dia!==expectedDia)){conflicts.push({order,line,item,reason:'Cruce parcial con códigos contradictorios'});continue;}
+  const received=canonicalWoeUnit(line.unit),orderUnit=canonicalWoeUnit(item.woe?.ump),operational=canonicalWoeUnit(item.unit),quantity=numberValue(line.quantity),pack=Math.max(1,Number(item.p?.woePack)||1);let units=null;
+  if(quantity!==null&&quantity>=0){if(received&&received===orderUnit)units=Math.ceil(quantity*pack-1e-9);else if(received&&received===operational)units=Math.ceil(quantity-1e-9);else if(received==='PZA')units=Math.ceil(quantity-1e-9);}
+  if(units===null){conflicts.push({order,line,item,reason:`Unidad ${line.unit||'—'} incompatible`});continue;}
+  const entry={purchaseOrder:order.purchaseOrder,deliveryDate:order.deliveryDate,provider:order.providerAlias||order.provider,quantity:units,sourceQuantity:quantity,sourceUnit:line.unit,sourceName:order.sourceName};
+  if(!byItem.has(item.key))byItem.set(item.key,[]);byItem.get(item.key).push(entry);matchedLines++;matchedUnits+=units;
+ }}
+ return {byItem,matchedLines,matchedUnits,unmatched,conflicts,totalLines:orders.reduce((total,order)=>total+(order.lines?.length||0),0)};
+}
 export function calculateOrder(item,input={},settings={}){
  const weekdays=(settings.receptions||[]).map(Number),next=weekdays.length?nextReception(settings.delivery,weekdays):null;
- const end=next||settings.delivery,coverage=coverageDays(settings.today,end,settings.fraction??1),stock=numberValue(input.stock),transit=numberValue(input.transit);
+ const end=next||settings.delivery,coverage=coverageDays(settings.today,end,settings.fraction??1),stock=numberValue(input.stock),manualTransit=numberValue(input.transit),transits=Array.isArray(input.transits)?input.transits:null;
  const reasons=item.blocked?[item.reason]:[];
  if(!dateParts(settings.today)||!dateParts(settings.delivery)||settings.delivery<settings.today||coverage===null)reasons.push('Define fechas de pedido');
  if(stock===null||stock<0)reasons.push('Captura existencia');
- if((input.transit!==undefined&&input.transit!==null&&input.transit!==''&&transit===null)||(transit!==null&&transit<0)||(transit>0&&(!dateParts(input.transitDate)||input.transitDate<settings.today||input.transitDate>end)))reasons.push('Revisa fecha de tránsito');
+ if(!transits&&((input.transit!==undefined&&input.transit!==null&&input.transit!==''&&manualTransit===null)||(manualTransit!==null&&manualTransit<0)||(manualTransit>0&&(!dateParts(input.transitDate)||input.transitDate<settings.today||input.transitDate>end))))reasons.push('Revisa fecha de tránsito');
+ if(transits?.some(entry=>!dateParts(entry.deliveryDate)||numberValue(entry.quantity)===null||Number(entry.quantity)<0))reasons.push('Revisa PDF de tránsito');
+ const transit=transits?sum(transits.filter(entry=>entry.deliveryDate>=settings.today&&entry.deliveryDate<=end),entry=>Math.max(0,Number(entry.quantity)||0)):(manualTransit||0);
  const demand=coverage===null?null:Math.max(0,item.minimum)*coverage,available=Math.max(0,stock||0)+(transit||0);
  const missing=demand===null?null:Math.max(0,demand-available),suggested=missing!==null&&item.p.woePack?epsCeil(missing/item.p.woePack):null;
  const captured=numberValue(input.order),quantity=captured===null?suggested:captured;
  if((input.order!==undefined&&input.order!==null&&input.order!==''&&captured===null)||(captured!==null&&(!Number.isInteger(captured)||captured<0||suggested===null||captured>suggested)))reasons.push('Pedido excede sugerido o no es entero');
- return {item,end,coverage,demand,stock,transit:transit||0,available,missing,suggested,quantity,blocked:reasons.length>0,reason:reasons.join(' · ')};
+ return {item,end,coverage,demand,stock,transit:transit||0,transits:transits||[],available,missing,suggested,quantity,blocked:reasons.length>0,reason:reasons.join(' · ')};
 }
 
-export function cycleMinutes(volume){
- const value=Number(volume);if(!Number.isFinite(value)||value<0)return null;
- if(value<=10)return 30;if(value<=25)return 20;if(value<=35)return 12;return 8;
-}
-export function peakObjective(peak,increase=5){
- const current=Number(peak?.average),step=Math.max(0,Math.round(Number(increase)||0));
- if(!Number.isFinite(current))return {current:null,target:null,increase:step,progress:null};
- const baseline=Math.round(current),target=baseline+step;
- return {current:baseline,target,increase:step,progress:target>0?baseline/target:1};
-}
 export function peakHour(d,f={}){
- const weeks=Array.isArray(f.weeks)?f.weeks.filter(Boolean):[],explicitPeriod=!!f.week||weeks.length>0||!!f.from;
- const extentFacts=filterFacts(d.salesFacts,{store:f.store,week:f.week,weeks,from:f.from,to:f.to}),extent=dateExtent(extentFacts),to=f.to||extent.to;
- const lower=!explicitPeriod&&to?new Date(dateParts(to).dayMs-20*DAY_MS).toISOString().slice(0,10):(f.from||'');
- const periodFilter={...f,from:lower,to},observedFacts=filterFacts(d.salesFacts,{...periodFilter,mode:'',modes:[]}),facts=filterFacts(d.salesFacts,periodFilter),transactions=new Map();
+ const facts=filterFacts(d.salesFacts,f),transactions=new Map();
  for(const r of facts){const tx=transactions.get(r.transactionKey);if(!tx||r.ms<tx.ms)transactions.set(r.transactionKey,r);}
- const days=[...new Set(observedFacts.map(r=>r.dateKey))].sort(),dates=new Map(days.map(day=>[day,Array(48).fill(0)]));
- for(const tx of transactions.values()){if(dates.has(tx.dateKey))dates.get(tx.dateKey)[tx.slot]++;}
- const total=transactions.size;
+ const dates=new Map();for(const tx of transactions.values()){if(!dates.has(tx.dateKey))dates.set(tx.dateKey,Array(48).fill(0));dates.get(tx.dateKey)[tx.slot]++;}
+ const days=[...dates.keys()],total=transactions.size;
  const slots=Array.from({length:48},(_,i)=>({slot:i,label:clock(i),total:sum([...dates.values()],r=>r[i]),average:days.length?sum([...dates.values()],r=>r[i])/days.length:null,weekday:DAY_LABELS.map((_,w)=>{const ds=days.filter(day=>dateParts(day).weekday===w);return ds.length?sum(ds,day=>dates.get(day)[i])/ds.length:null;})}));
- function peak(start,end,weekday=null,selectedDays=days){
-  const ds=selectedDays.filter(day=>weekday===null||dateParts(day).weekday===weekday);let best=null;
-  for(let i=start;i<=end-4;i++){const count=sum(ds,day=>sum(dates.get(day).slice(i,i+4),x=>x));if(count>0&&(!best||count>best.total)){const halfHours=Array.from({length:4},(_,offset)=>sum(ds,day=>dates.get(day)[i+offset])/ds.length),halfHourMax=Math.max(...halfHours),frequency=cycleMinutes(halfHourMax);best={slot:i,label:`${clock(i)} - ${clock(i+4)}`,total:count,average:count/ds.length,days:ds.length,halfHours,halfHourMax,cycleMinutes:frequency,cycles:frequency?Math.ceil(120/frequency):null};}}
-  return best;
- }
- const weekday=DAY_LABELS.map((day,i)=>{const comparableDays=days.filter(d=>dateParts(d).weekday===i);return {day,days:comparableDays.length,am:peak(0,24,i),pm:peak(24,48,i)};});
- const comparisons=DAY_LABELS.map((day,weekdayIndex)=>{const comparableDays=days.filter(date=>dateParts(date).weekday===weekdayIndex),currentDate=comparableDays.at(-1),previousDate=comparableDays.at(-2);if(!currentDate)return null;const current={date:currentDate,am:peak(0,24,null,[currentDate]),pm:peak(24,48,null,[currentDate])},previous=previousDate?{date:previousDate,am:peak(0,24,null,[previousDate]),pm:peak(24,48,null,[previousDate])}:null;const delta=segment=>{const a=current[segment]?.total,b=previous?.[segment]?.total;if(!Number.isFinite(a)||!Number.isFinite(b))return null;return {value:a-b,percent:b>0?(a-b)/b:null};};return {day,current,previous,amDelta:delta('am'),pmDelta:delta('pm')};}).filter(Boolean);
- const range=dateExtent(observedFacts);
- return {facts,orders:total,sales:sum(facts,'total'),days:days.length,dates:days,slots,activeSlots:slots.filter(slot=>slot.total>0),am:peak(0,24),pm:peak(24,48),weekday,comparisons,windowDays:explicitPeriod?null:21,...range};
+ function peak(start,end,weekday=null){const ds=days.filter(day=>weekday===null||dateParts(day).weekday===weekday);let best=null;for(let i=start;i<=end-4;i++){const count=sum(ds,day=>sum(dates.get(day).slice(i,i+4),x=>x));if(count>0&&(!best||count>best.total))best={slot:i,label:`${clock(i)} - ${clock(i+4)}`,total:count,average:count/ds.length,days:ds.length};}return best;}
+ return {facts,orders:total,sales:sum(facts,'total'),days:days.length,slots,am:peak(0,24),pm:peak(24,48),weekday:DAY_LABELS.map((day,i)=>({day,days:days.filter(d=>dateParts(d).weekday===i).length,am:peak(0,24,i),pm:peak(24,48,i)})),...dateExtent(facts)};
 }
 
 // Size rules traced to Detalle_vaso Power Query, Reporte Normalizado_v2.
@@ -229,6 +237,31 @@ export function topProducts(d,f={},kind='drinks'){
  return {items:rows.map(r=>({...r,share:units?r.units/units:0})),units,sales:sum(rows,'sales'),days:days.length,unmapped,...dateExtent(facts)};
 }
 
+export function assemblyProjection(d,f={}){
+ const facts=filterFacts(d.salesFacts,f),dates=[...new Set(facts.map(row=>row.dateKey))].sort(),days=dates.length,products=new Map();
+ const sourceRules=[...d.foodRules.values()].filter(rule=>rule.assemblyEnabled&&rule.assembly);
+ for(const rule of sourceRules){
+  const key=normalize(rule.assembly),recipe=assemblyRecipe(rule.assembly);
+  if(!products.has(key))products.set(key,{key,name:recipe?.name||rule.assembly,recipe:recipe?{...recipe,rule:rule.ingredient||recipe.rule}:null,sources:new Set(),slots:Array(48).fill(0),historical:0});
+  products.get(key).sources.add(rule.item);
+ }
+ let returns=0,unmapped=0;
+ for(const row of facts){
+  const name=itemName(d,row),rule=d.foodRules.get(normalize(name));
+  if(!rule?.assemblyEnabled||!rule.assembly)continue;
+  const target=products.get(normalize(rule.assembly));if(!target){unmapped++;continue;}target.sources.add(name);
+  if(row.adjusted<0||row.negative){returns+=Math.abs(row.adjusted||0);continue;}
+  const quantity=Math.max(0,row.adjusted)*(rule.pieces??1);target.slots[row.slot]+=quantity;target.historical+=quantity;
+ }
+ const rows=[...products.values()].map(product=>{
+  const slotPlan=product.slots.map(total=>({total,expected:days?total/days:null,prepare:days&&total>0?epsCeil(total/days):0})),plan=sum(slotPlan,'prepare'),average=days?product.historical/days:null;
+  return {...product,sources:[...product.sources].filter(Boolean).sort((a,b)=>a.localeCompare(b,'es')),slots:slotPlan,plan,average,ingredients:projectedIngredients(product.recipe,plan)};
+ }).sort((a,b)=>a.name.localeCompare(b.name,'es'));
+ const slots=Array.from({length:48},(_,slot)=>{const items=rows.map(product=>({key:product.key,name:product.name,...product.slots[slot]})),expected=sum(items,'expected'),prepare=sum(items,'prepare');return {slot,label:`${clock(slot)} - ${clock(slot+1)}`,items,expected,prepare};});
+ const activeSlots=slots.filter(slot=>slot.prepare>0),peak=activeSlots.reduce((best,slot)=>!best||slot.prepare>best.prepare||slot.prepare===best.prepare&&slot.expected>best.expected?slot:best,null);
+ return {products:rows,slots,activeSlots,days,dates,weeks:new Set(dates.map(weekKey)).size,average:days?sum(rows,'historical')/days:null,planned:sum(rows,'plan'),peak,returns,unmapped,sourceRules:sourceRules.length,recipesReady:rows.filter(product=>product.recipe).length,...dateExtent(facts)};
+}
+
 export function bakingForecast(d,f={},inputs={},settings={}){
  const target=dateParts(settings.date),start=Number(settings.slot??0),facts=filterFacts(d.salesFacts,{...f,weekday:''});
  if(!target)return {items:[],groups:[],days:0,reason:'Selecciona fecha de horneo'};
@@ -255,13 +288,13 @@ export function reportFor(module,result,context={}){
  if(module==='maxmin'){
   const selected=new Set(context.selectedKeys||[]),items=selected.size?r.items.filter(i=>selected.has(i.key)):[],priority=new Map(r.items.map((i,index)=>[i.key,index+1]));
   report.layout=context.outputView==='list'?'maxmin-list':'labels';report.hideSummary=true;report.operationalHeader=true;report.orders=r.orders;report.summary=[['Productos seleccionados',items.length],['Días observados',r.days],['Pedidos por semana',r.orders]];
-  const cards=items.map(i=>{const mode=context.modes?.[i.key]||context.mode||'unit',c=minmaxValues(i,mode),piecesPerCase=mode==='sleeve'?sleeveFor(i)?.size:(i.p.stockPack||i.p.woePack);return {...c,name:i.sapName,sapName:i.sapName,microsName:i.microsName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',daily:i.minimum,mode,orders:r.orders,priority:priority.get(i.key),piecesPerCase,adjusted:i.adjusted};});
+  const cards=items.map(i=>{const mode=resolvePresentationMode(i,context.modes?.[i.key]||context.mode||'unit'),c=minmaxValues(i,mode),piecesPerCase=mode==='sleeve'?sleeveFor(i)?.size:mode==='pack'?packSizeFor(i):null;return {...c,name:i.sapName,sapName:i.sapName,microsName:i.microsName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',daily:i.minimum,mode,orders:r.orders,priority:priority.get(i.key),piecesPerCase,adjusted:i.adjusted};});
   if(report.layout==='labels')report.cards=cards;
   else report.listCards=cards.map((card,index)=>({...card,priority:priority.get(items[index].key),family:items[index].family}));
-  report.sheets.push({name:'Uso Unidad',headers:['Descripción SAP','Nombre Micros','#DIA','#SAP','Min','Max','Unidad / Pick Pack','Pz / Caja','# Pedido'],rows:items.map(i=>[i.sapName,i.microsName,i.woe?.dia||'',i.woe?.sap||'',Number(i.minimum.toFixed(1)),Number(i.maximum.toFixed(1)),'Unidad',i.p.stockPack||i.p.woePack||'',r.orders]),formats:[null,null,null,null,'oneDecimal','oneDecimal',null,'integer','integer'],widths:[38,32,14,14,12,12,22,14,13]});
+  report.sheets.push({name:'Uso Unidad',headers:['Descripción SAP','Nombre Micros','#DIA','#SAP','Min','Max','Unidad / Pick Pack','Pz / Caja','# Pedido'],rows:items.map(i=>[i.sapName,i.microsName,i.woe?.dia||'',i.woe?.sap||'',Number(i.minimum.toFixed(1)),Number(i.maximum.toFixed(1)),'Unidad','',r.orders]),formats:[null,null,null,null,'oneDecimal','oneDecimal',null,'integer','integer'],widths:[38,32,14,14,12,12,22,14,13]});
   const packRows=[];
   for(const i of items){
-   const base={name:i.sapName,micros:i.microsName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',orders:r.orders},pack=minmaxValues(i,'pack'),candidates=[{format:'Pick Pack',values:pack}];
+   const base={name:i.sapName,micros:i.microsName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',orders:r.orders},pack=minmaxValues(i,'pack'),candidates=pack.packSize?[{format:'Pick Pack',values:pack}]:[];
    const sleeve=sleeveFor(i);if(sleeve&&sleeve.size!==pack.packSize)candidates.push({format:'Manga',values:minmaxValues(i,'sleeve')});
    for(const candidate of candidates){const c=candidate.values;packRows.push([base.name,base.micros,base.dia,base.sap,c.minimum??'',c.maximum??'',candidate.format,c.packSize||'',base.orders]);}
   }
@@ -272,17 +305,17 @@ export function reportFor(module,result,context={}){
   if(focus){report.focusName=focus.sapName;report.filters=[`Producto: ${focus.sapName}`,report.filters].filter(Boolean).join(' · ');sheet('Tendencia semanal',['Semana','Días observados','Promedio diario'],focus.weeks.map(w=>[`${shortDate(w.week)} - ${shortDate(new Date(dateParts(w.week).dayMs+6*DAY_MS).toISOString().slice(0,10))}`,w.days,w.average]));sheet('Promedio por día',['Día','Días observados','Promedio diario'],focus.weekday.map(day=>[day.name,day.days,day.average]));}
   sheet('Uso por producto',['Descripción SAP','Nombre Micros','#DIA','#SAP','Unidad','Uso total','Promedio diario'],r.items.map(i=>[i.sapName,i.microsName,i.woe?.dia||'',i.woe?.sap||'',i.unit,i.totalUse,i.average]));
  }
- if(module==='order'){report.summary=[['Días observados',r.days],['Artículos bloqueados',r.excluded]];const ready=(context.orders||[]).filter(x=>!x.blocked&&x.quantity>0);sheet('Pedido',['Producto','SAP','DIA','Proveedor','Unidad WOE','Cantidad','Existencia','Tránsito','Cobertura hasta'],ready.map(x=>[x.item.name,x.item.woe.sap,x.item.woe.dia,x.item.woe.provider,x.item.woe.ump,x.quantity,x.stock,x.transit,x.end]));sheet('Base del pedido',['Producto','Base de uso','Unidad de captura','Uso diario','Días de cobertura','Demanda','Faltante'],ready.map(x=>[x.item.name,x.item.usageSource||'Uso ideal _ac',x.item.unit,x.item.minimum,x.coverage,x.demand,x.missing]));}
- if(module==='peak'){
-  const visible=value=>value===0?'':value,comparisons=r.comparisons.filter(x=>x.previous),cycleRows=[['AM',r.am],['PM',r.pm]].map(([name,value])=>[name,value?.label||'Sin demanda',value?.halfHourMax??null,value?.cycleMinutes?`Cada ${value.cycleMinutes} min`:'Sin dato',value?.cycles??null]);
-  const goals={am:peakObjective(r.am,context.peakGoals?.am),pm:peakObjective(r.pm,context.peakGoals?.pm)};
-  report.layout='peak-hour';report.operationalHeader=true;report.peak={am:r.am,pm:r.pm,orders:r.orders,days:r.days,windowDays:r.windowDays};report.goals=goals;report.comparisons=comparisons;report.cycleRows=cycleRows;report.activeSlots=r.activeSlots;
-  report.summary=[['Órdenes',r.orders],['Días observados',r.days],['Peak AM',r.am?.label||'Sin demanda'],['Promedio AM',r.am?.average??null],['Peak PM',r.pm?.label||'Sin demanda'],['Promedio PM',r.pm?.average??null]];
-  sheet('Comparativo',['Comparable','Peak AM actual','Anterior','Cambio AM','Peak PM actual','Anterior','Cambio PM'],comparisons.map(x=>[`${x.day} ${shortDate(x.current.date)} vs ${shortDate(x.previous.date)}`,x.current.am?.total??'',x.previous.am?.total??'',x.amDelta?.value??'',x.current.pm?.total??'',x.previous.pm?.total??'',x.pmDelta?.value??'']));
-  sheet('Asistente PH',['Peak','Periodo','Máx. por 30 min','Frecuencia CS','Ciclos en 2 h'],cycleRows);
-  sheet('Foco por media hora',['Franja',...DAY_LABELS,'Promedio'],r.activeSlots.map(x=>[x.label,...x.weekday.map(visible),visible(x.average)]));
-  sheet('Promedio comparable',['Día','Comparables','Peak AM','Órdenes prom.','Peak PM','Órdenes prom.'],r.weekday.filter(x=>x.days>0).map(x=>[x.day,x.days,x.am?.label||'',x.am?.average??'',x.pm?.label||'',x.pm?.average??'']));
+ if(module==='order'){
+  const reviewed=(context.orders||[]).filter(x=>x.stock!==null&&x.stock>=0),ready=reviewed.filter(x=>!x.blocked&&x.quantity>0),transitOrders=context.transitOrders||[],audit=context.transitAudit||{unmatched:[],conflicts:[]},settings=context.orderSettings||{};
+  report.layout='order-woe';report.hideSummary=true;report.operationalHeader=true;report.generatedAt=settings.today||new Date().toISOString().slice(0,10);report.period=settings.today&&settings.delivery?`${shortDate(settings.today)} - ${shortDate(settings.delivery)}`:shortPeriod(r.from,r.to);report.orders=`${ready.length} art. · ${sum(ready,'quantity')} uds.`;report.summary=[['Artículos revisados',reviewed.length],['Artículos por pedir',ready.length],['Unidades WOE',sum(ready,'quantity')]];
+  report.transitColumns=transitOrders.map(order=>({key:String(order.purchaseOrder),deliveryDate:order.deliveryDate,purchaseOrder:String(order.purchaseOrder),provider:order.providerAlias||order.provider}));
+  report.orderRows=reviewed.map(x=>{const transitByOrder=Object.fromEntries(report.transitColumns.map(column=>[column.key,sum(x.transits.filter(entry=>String(entry.purchaseOrder)===column.key),'quantity')]));return {sap:x.item.woe?.sap||'',dia:x.item.woe?.dia||'',sapDescription:x.item.sapName||x.item.name,microsDescription:x.item.microsName||x.item.name,stock:x.stock,transitByOrder,quantity:x.blocked?'—':x.quantity??0,quantityLabel:x.blocked?'REVISAR':`${x.quantity??0} ${x.item.woe?.ump||'Unidad'}`,status:x.blocked?x.reason:x.quantity>0?'Por pedir':'Sin pedido',unit:x.item.woe?.ump||'',operationalUnit:x.item.unit||'PZA',coverageEnd:x.end};});
+  const transitHeaders=report.transitColumns.map(column=>`Tránsito ${shortDate(column.deliveryDate)} #${column.purchaseOrder.slice(-6)}`);
+  report.sheets.push({name:'Pedido WOE',headers:['#SAP','#DIA','Descripción SAP','Nombre Micros',...transitHeaders,'Existencia física','Cantidad a pedir','Unidad WOE','Estado'],rows:report.orderRows.map(row=>[row.sap,row.dia,row.sapDescription,row.microsDescription,...report.transitColumns.map(column=>row.transitByOrder[column.key]||0),row.stock,typeof row.quantity==='number'?row.quantity:'',row.unit,row.status]),formats:[null,null,null,null,...report.transitColumns.map(()=> 'oneDecimal'),'oneDecimal','integer',null,null],widths:[14,14,34,30,...report.transitColumns.map(()=>18),17,17,15,28]});
+  if(transitOrders.length)sheet('Pedidos en tránsito',['Núm. pedido','Entrega','Proveedor','Archivo','Líneas'],transitOrders.map(order=>[order.purchaseOrder,order.deliveryDate,order.providerAlias||order.provider,order.sourceName,order.lines?.length||0]));
+  const issues=[...(audit.conflicts||[]),...(audit.unmatched||[])];if(issues.length)sheet('Cruces por revisar',['Núm. pedido','Entrega','#DIA / Material','#SAP','Descripción PDF','Cantidad','Unidad','Motivo'],issues.map(issue=>[issue.order.purchaseOrder,issue.order.deliveryDate,issue.line.material,issue.line.sap,issue.line.description,issue.line.quantity,issue.line.unit,issue.reason]));
  }
+ if(module==='peak'){report.summary=[['Órdenes',r.orders],['Días observados',r.days],['Peak AM',r.am?.label||'Sin demanda'],['Promedio AM',r.am?.average??null],['Peak PM',r.pm?.label||'Sin demanda'],['Promedio PM',r.pm?.average??null]];sheet('Medias horas',['Franja','Órdenes totales','Promedio',...DAY_LABELS],r.slots.map(x=>[x.label,x.total,x.average,...x.weekday]));sheet('Días comparables',['Día','Días','Peak AM','Promedio AM','Peak PM','Promedio PM'],r.weekday.map(x=>[x.day,x.days,x.am?.label||'',x.am?.average??null,x.pm?.label||'',x.pm?.average??null]));}
  if(module==='normal'){
   report.summary=[['Bebidas en vaso',sum(r.sizes,x=>x.hot+x.cold)],['FHW (sin desechable)',r.fhw],['Devoluciones separadas',r.returns],['Productos sin regla',r.unknown.length]];
   if(context.subtab==='Crema batida')sheet('Crema batida',['Indicación registrada','Cantidad'],[['Con crema',r.cream.with],['Sin crema',r.cream.without]]);
@@ -291,6 +324,15 @@ export function reportFor(module,result,context={}){
   if(r.unknown.length)sheet('Sin regla',['Producto','Cantidad'],r.unknown.map(x=>[x.name,x.quantity]));
  }
  if(module==='top'){report.summary=[['Unidades netas',r.units],['Venta',r.sales]];sheet(context.subtab||'Ranking',['Producto','Unidades','Participación',...DAY_LABELS,'Venta'],r.items.map(x=>[x.name,x.units,x.share,...x.weekday,x.sales]));}
+ if(module==='assembly'){
+  report.layout='assembly-plan';report.hideSummary=true;report.operationalHeader=true;report.summary=[['Días comparables',r.days],['Productos de ensamble',r.products.length],['Promedio diario',r.average],['Plan por franjas',r.planned]];
+  report.assemblyProducts=r.products;report.assemblySlots=r.activeSlots;
+  sheet('Plan media hora',['Franja','Total a preparar',...r.products.map(product=>product.name)],r.activeSlots.map(slot=>[slot.label,slot.prepare,...slot.items.map(item=>item.prepare)]));
+  const ingredientRows=[];for(const product of r.products){if(product.recipe?.packaged)ingredientRows.push([product.name,product.plan,'Viene empaquetada','','',product.recipe.rule]);else for(const ingredient of product.ingredients)ingredientRows.push([product.name,product.plan,ingredient.name,ingredient.totalUnits,ingredient.unit,ingredient.totalGrams,product.recipe?.rule||'Receta pendiente']);}
+  report.assemblyIngredients=ingredientRows;
+  report.sheets.push({name:'Ingredientes',headers:['Ensamble','Plan del día','Ingrediente','Cantidad','Unidad','Peso estimado (g)','Regla por producto'],rows:ingredientRows,formats:[null,'integer',null,'integer',null,'integer',null],widths:[30,14,20,12,20,19,54]});
+  report.sheets.push({name:'Trazabilidad',headers:['Nombre unificado','Productos MICROS de origen','Venta histórica','Promedio diario','Plan por franjas','Regla validada'],rows:r.products.map(product=>[product.name,product.sources.join(', '),product.historical,product.average,product.plan,product.recipe?.rule||'Pendiente']),formats:[null,null,'oneDecimal','oneDecimal','integer',null],widths:[30,55,17,17,18,55]});
+ }
  if(module==='baking'){report.period=shortDate(r.date);report.summary=[['Día comparable',r.weekday],['Días de referencia',r.days],['Desde',clock(r.slot)],['Referencia',r.dates?.map(shortDate).join(', ')||'Sin historial']];sheet('Previsión',['Producto','Previsto restante','Ya horneado','Por hornear','Capacidad por charola','Horneo','Temperatura'],r.items.map(x=>[x.product,x.forecast,x.stock,x.need,x.maxTray,x.bake,x.temperature]));sheet('Tandas',['Grupo','Productos','Piezas','Charolas combinadas'],r.groups.map(x=>[x.name,x.products.join(', '),x.need,x.trays]));}
  if(module==='audit'){report.summary=[['Órdenes negativas',r.negativeCount],['Importe negativo',r.negativeAmount],['Tickets con void',r.voidCount],['Sin soporte completo',r.pending]];sheet('Revisión',['Fecha','Ticket','Importe a revisar','Motivo','Pago asociado','Revisión'],r.items.map(x=>[x.date,x.ticket,x.amount,x.reasons.join(', '),x.payments.map(p=>p.name).join(', '),x.review]));}
  return report;

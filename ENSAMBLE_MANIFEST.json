@@ -1,0 +1,35 @@
+{
+  "release": "5.5.0",
+  "scope": "Ensamble",
+  "base": "a41289103200187c0be05633ef7131a61c585a07",
+  "status": "GREEN",
+  "validated_mapping": {
+    "source_products": 12,
+    "unified_assemblies": 6,
+    "recipes": 6,
+    "ingredient_rows": 12,
+    "half_hour_slots": 48
+  },
+  "features": [
+    "multi-select weeks",
+    "multi-select weekdays",
+    "observed-day averages including zero-demand dates",
+    "returns separated from positive assembly demand",
+    "operational rounding per product and half-hour",
+    "ingredient projections in portions and grams",
+    "dedicated Excel and PDF exports"
+  ],
+  "exports": {
+    "xlsx_sheets": [
+      "Plan media hora",
+      "Ingredientes",
+      "Trazabilidad"
+    ],
+    "pdf_layout": "assembly-plan"
+  },
+  "verification": {
+    "javascript_tests": 71,
+    "python_tests": 33,
+    "assembly_audit": "GREEN"
+  }
+}

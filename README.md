@@ -1,6 +1,6 @@
 # Control Ops 360°
 
-Multiherramienta local de tienda. Uno o varios XLSM activan sólo sus módulos. CeCo fijo, cruces tbl, tarjetas Max & Min, tendencia, Pedido WOE, 48 medias horas, normalizados, horneo, ranking y auditoría. Excel y PDF pertenecen al menú activo.
+Multiherramienta local de tienda. Uno o varios XLSM activan sólo sus módulos. CeCo fijo, cruces tbl, tarjetas Max & Min, tendencia, Pedido WOE, ensamble por media hora, normalizados, horneo, ranking y auditoría. Excel y PDF pertenecen al menú activo.
 
 ## Actualización V5
 
@@ -16,11 +16,20 @@ Los PDF SAP de pedidos en tránsito se leen localmente en el navegador. Cada rem
 
 Las exportaciones de Excel y PDF están orientadas a operación: incluyen identificación SAP/DIA, descripción, existencia, tránsito por remisión, cantidad final y los cruces que requieren revisión. Ningún archivo operativo se envía fuera del navegador.
 
+### Ensamble V5.5
+
+`Ensamble` usa las 12 filas validadas de la tbl con `Ensamble = Si` y las consolida en 6 nombres unificados. La columna `Ingrediente ensamble` quedó agregada al parámetro embebido con contenido en las 12 filas aplicables. Los filtros de semana y día aceptan selección múltiple. El motor promedia los días realmente observados en cada intervalo de 30 minutos, separa devoluciones y redondea hacia arriba únicamente para formar el plan operativo.
+
+La pantalla guía al usuario en tres pasos, muestra el promedio exacto debajo de cada cantidad sugerida y destaca la franja de mayor carga. La guía de ingredientes convierte el plan del día en rebanadas y gramos; `Panini Pavo` permanece identificado como producto empaquetado.
+
+Excel entrega `Plan media hora`, `Ingredientes` y `Trazabilidad`. El PDF genera una tabla operativa por franja y una segunda sección visual de recetas. Los filtros y los cálculos permanecen limitados a esta pestaña.
+
 ## Pruebas
 
 ```bash
 python -m unittest discover -s tests -v
 node --test tests/*.test.mjs
+python scripts/auditar_ensamble.py
 python scripts/auditar_pedido_woe.py
 python scripts/compatibilidad_xlsm.py motor.xlsm parametro.xlsx
 ```

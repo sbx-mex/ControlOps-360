@@ -31,17 +31,20 @@ except ImportError as error:  # pragma: no cover
 
 CATALOG_HEADERS = ("DescripcionFam", "Descripcion", "Normalizado", "Vaso")
 OP_REQUIRED = ("DescripcionFam", "Descripcion", "NivelPrecio")
-RAW_REQUIRED = ("IDProducto", "CantidadAjustada", "NivelPrecio")
-PRODUCT_REQUIRED = ("IDProducto", "CatDescripcion", "DescripcionFam", "Descripcion")
 PRICE_SIZE = {1: "Corto", 2: "Alto", 3: "Grande", 7: "Grande", 4: "Venti", 8: "Venti", 9: "Traveler"}
-BEVERAGE_FAMILY = re.compile(r"espresso|frappuccino|starbucksconhielo|starbuckstea|alternativas?alcafe|cafeclasico")
-RTD_FAMILY = re.compile(r"bebidas?frias?|readytodrink|rtd|embotellad|envasad")
-COLD_NAME = re.compile(
-    r"(^|\W)(hel\.?|helado|iced|frozen|frapp|cold\s*brew|refresher|shaken|dragon\s*drink|pink\s*drink|lemonade|f)(\W|$)|(?:lat|latte)\s*h(?:\W|$)",
+BEVERAGE_FAMILY = re.compile(
+    r"espresso|frappuccino|starbucks\s*(con\s*hielo|tea)|alternativas?\s+al\s+cafe|caf[eé]\s+clasico",
     re.I,
 )
-NON_DRINK = re.compile(r"^cf\s*(pumpkin|maple)|^agua\b|evian|aranch?iatta|aranciata|cold\s*foam|crema\s*fria|bundle|bndl|contigo|bakery|pastel|crois|pancho|pavpan|salty", re.I)
-HOT_RULE_OVERRIDES = {"latte"}
+COLD_NAME = re.compile(
+    r"(^|\W)(hel\.?|helado|iced|frozen|frapp|cold\s*brew|refresher|shaken|dragon\s*drink|pink\s*drink)(\W|$)",
+    re.I,
+)
+HOT_NAME = re.compile(
+    r"(^|\W)(cal\.?|caliente|cappuccino|cortado|espresso|americano|mocha|latte|chocolate|chai|te\s)(\W|$)",
+    re.I,
+)
+NON_DRINK = re.compile(r"bundle|bndl|contigo|bakery|pastel|crois|pancho|pavpan|salty", re.I)
 
 
 def normalize(value: object) -> str:
@@ -138,70 +141,29 @@ def operational_rows(path: Path) -> tuple[list[dict[str, object]], str, int]:
         optional = {}
         values = [ws.cell(header_row, column).value for column in range(1, ws.max_column + 1)]
         normalized_headers = {normalize(value): index + 1 for index, value in enumerate(values) if value not in (None, "")}
-        for name in ("CodigoDIA", "CantidadAjustada", "IDTamanio", "CatDescripcion"):
+        for name in ("CodigoDIA", "CantidadAjustada", "IDTamanio"):
             optional[name] = normalized_headers.get(normalize(name))
         rows = []
-        for values in ws.iter_rows(min_row=header_row + 1, values_only=True):
-            description = str(values[columns["Descripcion"] - 1] or "").strip()
+        for row_number in range(header_row + 1, ws.max_row + 1):
+            description = str(ws.cell(row_number, columns["Descripcion"]).value or "").strip()
             if not description:
                 continue
-            quantity = as_float(values[optional["CantidadAjustada"] - 1]) if optional["CantidadAjustada"] else 1.0
+            quantity = as_float(ws.cell(row_number, optional["CantidadAjustada"]).value) if optional["CantidadAjustada"] else 1.0
             if quantity <= 0:
                 continue
             rows.append(
                 {
-                    "family": str(values[columns["DescripcionFam"] - 1] or "").strip(),
-                    "category": str(values[optional["CatDescripcion"] - 1] or "").strip() if optional["CatDescripcion"] else "Bebidas",
+                    "family": str(ws.cell(row_number, columns["DescripcionFam"]).value or "").strip(),
                     "description": description,
-                    "price_level": as_int(values[columns["NivelPrecio"] - 1]),
-                    "dia": str(values[optional["CodigoDIA"] - 1] or "").strip() if optional["CodigoDIA"] else "",
+                    "price_level": as_int(ws.cell(row_number, columns["NivelPrecio"]).value),
+                    "dia": str(ws.cell(row_number, optional["CodigoDIA"]).value or "").strip() if optional["CodigoDIA"] else "",
                     "quantity": quantity,
                 }
             )
         candidates.append((rows, ws.title, header_row))
         if rows:
             return rows, ws.title, header_row
-
-    # Control Ops 360 already carries a raw detail motor. Join detalleventa_ac
-    # with producto_base so the updater also works without an intermediate
-    # Normalizados workbook or refreshed Power Query.
-    product_ws = next((sheet for sheet in wb.worksheets if normalize(sheet.title) == "productobase"), None)
-    detail_ws = next((sheet for sheet in wb.worksheets if normalize(sheet.title) == "detalleventaac"), None)
-    if product_ws is None or detail_ws is None:
-        return candidates[0] if candidates else ([], "", 0)
-    product_header, product_columns = find_header(product_ws, PRODUCT_REQUIRED)
-    products: dict[str, dict[str, str]] = {}
-    for values in product_ws.iter_rows(min_row=product_header + 1, values_only=True):
-        product_id = str(values[product_columns["IDProducto"] - 1] or "").strip().removesuffix(".0")
-        if not product_id:
-            continue
-        products[product_id] = {
-            "category": str(values[product_columns["CatDescripcion"] - 1] or "").strip(),
-            "family": str(values[product_columns["DescripcionFam"] - 1] or "").strip(),
-            "description": str(values[product_columns["Descripcion"] - 1] or "").strip(),
-        }
-    detail_header, detail_columns = find_header(detail_ws, RAW_REQUIRED)
-    detail_values = [detail_ws.cell(detail_header, column).value for column in range(1, detail_ws.max_column + 1)]
-    detail_headers = {normalize(value): index + 1 for index, value in enumerate(detail_values) if value not in (None, "")}
-    dia_column = detail_headers.get(normalize("CodigoDIA"))
-    rows = []
-    for values in detail_ws.iter_rows(min_row=detail_header + 1, values_only=True):
-        product_id = str(values[detail_columns["IDProducto"] - 1] or "").strip().removesuffix(".0")
-        product = products.get(product_id)
-        if not product or not product["description"]:
-            continue
-        quantity = as_float(values[detail_columns["CantidadAjustada"] - 1])
-        if quantity <= 0:
-            continue
-        rows.append(
-            {
-                **product,
-                "price_level": as_int(values[detail_columns["NivelPrecio"] - 1]),
-                "dia": str(values[dia_column - 1] or "").strip() if dia_column else "",
-                "quantity": quantity,
-            }
-        )
-    return rows, detail_ws.title, detail_header
+    return candidates[0] if candidates else ([], "", 0)
 
 
 def similarity(description: str, family: str, rule: Rule) -> float:
@@ -213,28 +175,28 @@ def similarity(description: str, family: str, rule: Rule) -> float:
     return min(1.0, sequence * 0.78 + overlap * 0.22 + family_bonus)
 
 
-def suggest(description: str, family: str, rules: list[Rule], category: str = "Bebidas") -> dict[str, object]:
+def suggest(description: str, family: str, rules: list[Rule]) -> dict[str, object]:
     ranked = sorted(((similarity(description, family, rule), rule) for rule in rules), key=lambda item: item[0], reverse=True)
     best_score, best = ranked[0]
     second_score = ranked[1][0] if len(ranked) > 1 else 0.0
     margin = best_score - second_score
-    family_key, category_key = normalize(family), normalize(category)
-    name_key = normalize(description)
-    cold = bool(COLD_NAME.search(description)) or bool(re.search(r"^hel|helado|iced|frozen|frapp|coldbrew|shake|refresher|dragon|acai|lemr|pink|lemonade|lath$|latteh$", name_key)) or bool(re.search(r"frappuccino|starbucksconhielo", family_key))
-    excluded = bool(RTD_FAMILY.search(family_key)) or bool(NON_DRINK.search(description))
-    beverage = bool(BEVERAGE_FAMILY.search(family_key)) and (not category_key or category_key == "bebidas")
-    candidate = beverage or (category_key == "bebidas" and excluded)
+    cold = bool(COLD_NAME.search(description)) or bool(re.search(r"frappuccino|con\s+hielo", family, re.I))
+    hot = not cold and (bool(HOT_NAME.search(description)) or bool(re.search(r"cafe\s+clasico", family, re.I)))
+    excluded = bool(NON_DRINK.search(description))
+    beverage = bool(BEVERAGE_FAMILY.search(family)) or cold or hot
 
     classification, vessel, method, confidence = "", "", "Sin regla suficiente", best_score
     auto = False
     if excluded:
-        classification, vessel, confidence, auto = "No", "Na", 0.99, True
-        method = "RTD / envasada" if RTD_FAMILY.search(family_key) else "Adicional que no consume vaso"
+        method = "Nombre de paquete o complemento; requiere revisión"
     elif beverage and cold:
-        classification, vessel, method, confidence, auto = "Vaso", "2_Helado", "Hel/LatH/F o subcategoría helada", max(best_score, 0.97), True
-    elif beverage:
-        classification, vessel, method, confidence, auto = "Vaso", "1_Caliente", "Sin marca Hel/F: bebida caliente", max(best_score, 0.95), True
-    elif candidate and best_score >= 0.80:
+        classification, vessel, method, confidence, auto = "Vaso", "2_Helado", "Regla explícita de bebida fría", max(best_score, 0.96), True
+    elif beverage and hot:
+        classification, vessel, method, confidence, auto = "Vaso", "1_Caliente", "Regla explícita de bebida caliente", max(best_score, 0.94), True
+    elif best_score >= 0.92 and margin >= 0.05 and normalize(family) == normalize(best.family):
+        classification, vessel = best.normalized, best.vessel
+        method, confidence, auto = "Coincidencia alta en la misma familia", best_score, True
+    elif best_score >= 0.80:
         classification, vessel, method = best.normalized, best.vessel, "Coincidencia para revisión"
 
     return {
@@ -246,30 +208,17 @@ def suggest(description: str, family: str, rules: list[Rule], category: str = "B
         "similar": best.description,
         "similar_family": best.family,
         "margin": margin,
-        "candidate": candidate,
-        "explicit": excluded or cold or name_key in HOT_RULE_OVERRIDES,
     }
 
 
-def update_catalog(source: Path, destination: Path, changes: list[dict[str, object]], sheet_name: str, header_row: int) -> None:
+def update_catalog(source: Path, destination: Path, additions: list[dict[str, object]], sheet_name: str, header_row: int) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if not changes:
+    if not additions:
         shutil.copy2(source, destination)
         return
     wb = load_workbook(source)
     ws = wb[sheet_name]
     _, columns = find_header(ws, CATALOG_HEADERS)
-    existing_rows = {}
-    for row_number in range(header_row + 1, ws.max_row + 1):
-        key = normalize(ws.cell(row_number, columns["Descripcion"]).value)
-        if key:
-            existing_rows[key] = row_number
-    corrections = [item for item in changes if item["action"] == "Correccion"]
-    additions = [item for item in changes if item["action"] == "Alta"]
-    for item in corrections:
-        row_number = existing_rows[normalize(item["description"])]
-        ws.cell(row_number, columns["Normalizado"], item["classification"])
-        ws.cell(row_number, columns["Vaso"], item["vessel"])
     start_row = ws.max_row + 1
     style_row = ws.max_row
     for offset, item in enumerate(additions):
@@ -303,13 +252,15 @@ def main() -> int:
 
     rules, sheet_name, header_row = read_catalog(args.catalogo)
     sales, source_sheet, source_header = operational_rows(args.operativo)
-    existing = {normalize(rule.description): rule for rule in rules}
+    existing = {normalize(rule.description) for rule in rules}
     grouped: dict[str, dict[str, object]] = {}
     for row in sales:
         key = normalize(row["description"])
+        if key in existing:
+            continue
         item = grouped.setdefault(
             key,
-            {"family": row["family"], "category": row.get("category", ""), "description": row["description"], "quantity": 0.0, "levels": Counter(), "dia": Counter()},
+            {"family": row["family"], "description": row["description"], "quantity": 0.0, "levels": Counter(), "dia": Counter()},
         )
         item["quantity"] += float(row["quantity"])
         if row["price_level"] is not None:
@@ -318,22 +269,9 @@ def main() -> int:
             item["dia"][row["dia"]] += float(row["quantity"])
 
     report_rows = []
-    changes = []
+    additions = []
     for item in sorted(grouped.values(), key=lambda value: (-value["quantity"], str(value["description"]))):
-        proposal = suggest(str(item["description"]), str(item["family"]), rules, str(item["category"]))
-        current = existing.get(normalize(item["description"]))
-        correction = bool(
-            current
-            and current.normalized == "Vaso"
-            and proposal["auto"]
-            and proposal["explicit"]
-            and proposal["classification"] in {"Vaso", "No"}
-            and (current.normalized, current.vessel) != (proposal["classification"], proposal["vessel"])
-        )
-        if current and not correction:
-            continue
-        if not current and not proposal["candidate"]:
-            continue
+        proposal = suggest(str(item["description"]), str(item["family"]), rules)
         levels = [level for level, _ in item["levels"].most_common()]
         sizes = []
         for level in levels:
@@ -344,9 +282,6 @@ def main() -> int:
         row = {
             **item,
             **proposal,
-            "action": "Correccion" if correction else "Alta" if proposal["auto"] else "Revision",
-            "current_classification": current.normalized if current else "",
-            "current_vessel": current.vessel if current else "",
             "dia_value": item["dia"].most_common(1)[0][0] if item["dia"] else "",
             "levels_value": ", ".join(map(str, levels)),
             "size": PRICE_SIZE.get(dominant_level, "Sin tamaño") if dominant_level is not None else "Sin tamaño",
@@ -354,12 +289,12 @@ def main() -> int:
         }
         report_rows.append(row)
         if proposal["auto"] and not args.solo_reporte:
-            changes.append(row)
+            additions.append(row)
 
     args.reporte.parent.mkdir(parents=True, exist_ok=True)
     fields = [
-        "Accion", "CatDescripcion", "DescripcionFam", "Descripcion", "CodigoDIA", "Cantidad", "NivelPrecio", "Tamaño dominante", "Tamaños observados",
-        "Normalizado actual", "Vaso actual", "Normalizado propuesto", "Vaso propuesto", "Confianza", "Método", "Similar a", "Aplicado",
+        "DescripcionFam", "Descripcion", "CodigoDIA", "Cantidad", "NivelPrecio", "Tamaño dominante", "Tamaños observados",
+        "Normalizado propuesto", "Vaso propuesto", "Confianza", "Método", "Similar a", "Alta automática",
     ]
     with args.reporte.open("w", encoding="utf-8-sig", newline="") as output:
         writer = csv.DictWriter(output, fieldnames=fields)
@@ -367,8 +302,6 @@ def main() -> int:
         for row in report_rows:
             writer.writerow(
                 {
-                    "Accion": row["action"],
-                    "CatDescripcion": row["category"],
                     "DescripcionFam": row["family"],
                     "Descripcion": row["description"],
                     "CodigoDIA": row["dia_value"],
@@ -376,21 +309,16 @@ def main() -> int:
                     "NivelPrecio": row["levels_value"],
                     "Tamaño dominante": row["size"],
                     "Tamaños observados": row["sizes_value"],
-                    "Normalizado actual": row["current_classification"],
-                    "Vaso actual": row["current_vessel"],
                     "Normalizado propuesto": row["classification"],
                     "Vaso propuesto": row["vessel"],
                     "Confianza": f"{row['confidence']:.1%}",
                     "Método": row["method"],
                     "Similar a": row["similar"],
-                    "Aplicado": "Si" if row["auto"] and not args.solo_reporte else "No",
+                    "Alta automática": "Si" if row["auto"] and not args.solo_reporte else "No",
                 }
             )
 
-    update_catalog(args.catalogo, args.salida, changes, sheet_name, header_row)
-    missing = [row for row in report_rows if row["action"] != "Correccion"]
-    additions = [row for row in changes if row["action"] == "Alta"]
-    corrections = [row for row in changes if row["action"] == "Correccion"]
+    update_catalog(args.catalogo, args.salida, additions, sheet_name, header_row)
     print(
         json.dumps(
             {
@@ -398,10 +326,8 @@ def main() -> int:
                 "hoja_operativa": source_sheet,
                 "fila_encabezado_operativa": source_header,
                 "filas_operativas": len(sales),
-                "productos_sin_regla": len(missing),
+                "bebidas_sin_regla": len(report_rows),
                 "altas_automaticas": len(additions),
-                "correcciones_automaticas": len(corrections),
-                "pendientes_revision": sum(1 for row in report_rows if row["action"] == "Revision"),
                 "catalogo_salida": str(args.salida),
                 "reporte": str(args.reporte),
             },
