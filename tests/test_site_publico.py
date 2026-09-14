@@ -61,6 +61,11 @@ class SitioPublicoTests(unittest.TestCase):
     def test_maxmin_is_selectable_compact_and_multi_filter(self):
         for token in ('data-multi-filter=', 'data-maxmin-select=', 'step="0.1"', 'PDF etiquetas', 'primary=i.sapName', "'outputView','Ver en'", 'Pz / Caja'):
             self.assertIn(token, self.ui)
+        for token in ('trendFilters()', 'Sin conversión a caja', 'label-meta-unit'):
+            self.assertIn(token, self.ui)
+        operations = (ROOT / "assets" / "operations.mjs").read_text()
+        self.assertIn("f.weekdays", operations)
+        self.assertIn("packSizeFor", operations)
         export = (ROOT / "assets" / "export.mjs").read_text()
         self.assertIn("ACTUALIZACIÓN / IMPRESIÓN", export)
         self.assertIn("PZ / CAJA", export)

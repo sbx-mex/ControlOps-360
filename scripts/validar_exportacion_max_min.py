@@ -54,6 +54,8 @@ def validate(path: Path) -> dict[str, int]:
             raise ValueError(f"Uso Unidad: relación Max & Min inválida en {row['Descripción SAP']}")
         if row["Unidad / Pick Pack"] != "Unidad":
             raise ValueError("Uso Unidad: formato operativo inesperado")
+        if row["Pz / Caja"] not in (None, ""):
+            raise ValueError("Uso Unidad: no debe mostrar conversión de caja")
 
     sleeve_rows = 0
     for row in pack_rows:
@@ -62,6 +64,9 @@ def validate(path: Path) -> dict[str, int]:
             raise ValueError("Pick Pack: artículo sin correspondencia en Uso Unidad")
         if row["Unidad / Pick Pack"] not in {"Pick Pack", "Manga"}:
             raise ValueError(f"Pick Pack: formato desconocido {row['Unidad / Pick Pack']}")
+        content = int(row["Pz / Caja"])
+        if content <= 1:
+            raise ValueError(f"Pick Pack: conversión redundante de {content} pieza")
         if row["Min"] not in (None, "") and row["Max"] not in (None, ""):
             orders = int(row["# Pedido"])
             minimum, maximum = int(row["Min"]), int(row["Max"])
@@ -69,7 +74,6 @@ def validate(path: Path) -> dict[str, int]:
                 raise ValueError(f"Pick Pack: relación Max & Min inválida en {row['Descripción SAP']}")
         if row["Unidad / Pick Pack"] == "Manga":
             sleeve_rows += 1
-            content = int(row["Pz / Caja"])
             if content not in {40, 50, 100}:
                 raise ValueError(f"Manga inválida: {content} piezas")
 
