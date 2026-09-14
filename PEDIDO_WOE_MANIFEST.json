@@ -1,0 +1,50 @@
+{
+  "project": "sbx-mex/ControlOps-360",
+  "version": "5.4.0",
+  "date": "2026-09-14",
+  "scope": "Pedido WOE",
+  "baseline": "7ed825189074adab31baa996df40076dcbd193b3",
+  "reference_project": {
+    "repository": "sbx-mex/WOE_Gestion_Inventario",
+    "reviewed_commit": "a8b9b52edbb77f315c0bb273281b13dfd036880e"
+  },
+  "verification": {
+    "status": "GREEN",
+    "javascript_tests": {"passed": 66, "failed": 0},
+    "python_tests": {"passed": 28, "failed": 0},
+    "cross_scenarios": {"passed": 19, "failed": 0},
+    "catalog": {
+      "woe_rows": 702,
+      "exact_sap_dia_crosses": 694,
+      "pending_current_sap_list": 8,
+      "contradictory_crosses": 0,
+      "duplicate_keys": 0
+    },
+    "pdf_visual_review": {
+      "status": "GREEN",
+      "format": "US Letter landscape",
+      "stress_case": "17 products, 6 transit orders, 4 pages",
+      "checks": ["legible headers", "no clipped table", "repeated keys", "page numbering"]
+    }
+  },
+  "files_sha256": {
+    "README.md": "d9084ddde763941115b5d8b7564d77ea0ee9b56ebbddc87b0ce2c753e798d53c",
+    "VERSION": "299be6bed159ae2783b200cd9d3cd8111b8133367dbee8d6b2c1a227a053f860",
+    "index.html": "e1a98e4d0cf9ff908aa388d1cf5625ea59d70a480090c1ee53c7aa965e1d8cea",
+    "ACTUALIZACION_PEDIDO_WOE.md": "6ccc4b0cf9587f7caad288bb7bc10f5a20a0f095ccacc982159545fbd713f1a5",
+    "assets/ui.mjs": "fe3fe4c48ace33e12e8d91fedca5f22cc7b663506c358c755384e664a7c6cd7d",
+    "assets/styles.css": "40e8c2475978bdf16e1f597056afaad2dc57bd353dd19c38c988702ab28bc4a8",
+    "assets/operations.mjs": "5f02df8f68b0753a0fa2e3c66b11c7226ee5a63b565e72fda808fdf928110314",
+    "assets/transit.mjs": "3f125fe41430df3a2e443a365d02b49c703a30984d32892abc1ac1979ae8ca86",
+    "assets/export.mjs": "dba67630a05d480adf785d57dfeab027d6a2968bfb68b1936e28cbde2af8afe2",
+    "assets/vendor/pdf.min.mjs": "2221020ea508479dcc1221f36f2731656339230097c69ba1f78802832c0ad685",
+    "assets/vendor/pdf.worker.min.mjs": "51a2fd1ea47f1a9b0814e65e0c336c739c54957795ee774e8f93cb81e8028dd1",
+    "assets/vendor/PDFJS-LICENSE.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "scripts/auditar_pedido_woe.py": "60f42a0dd3f431a8a69cbdc869b75c099822b3d0f12209636d1ee958ca010034",
+    "tests/engine.test.mjs": "86768bc860c4aa5ccd05686dfa9945907f412f94b0dfb6d2d0b18e33e8308e72",
+    "tests/export.test.mjs": "6dbe3f0e568561495226f49e24cf4a61b47559ccd68b11f6e8e8bfefefe589ed",
+    "tests/transit.test.mjs": "a0a0619883a5a84e075ad7e811f9494b57be77c2e329d074dcb9663084ae5e3b",
+    "tests/test_pedido_woe.py": "56b78edd67dcfe266c5a70e8ac24fb83b304809dcbbf650966bf4a1400b9a486",
+    "tests/test_site_publico.py": "e98364d1acae34703e135f342523e8ec90ca428390a0a3f4a7b050cce05d44de"
+  }
+}

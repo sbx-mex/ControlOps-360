@@ -131,18 +131,39 @@ export function minmaxValues(item,mode='unit'){
 
 export function coverageDays(today,end,fraction=1){const a=dateParts(today),b=dateParts(end);if(!a||!b||b.dayMs<a.dayMs||!Number.isFinite(Number(fraction)))return null;const days=(b.dayMs-a.dayMs)/DAY_MS;return days===0?Math.min(0.5,Math.max(0,Number(fraction))):days-0.5+Math.min(1,Math.max(0,Number(fraction)));}
 export function nextReception(date,weekdays){const d=dateParts(date);if(!d)return null;for(let offset=1;offset<=7;offset++){const next=dateParts(new Date(d.dayMs+offset*DAY_MS).toISOString().slice(0,10));if(weekdays.includes(next.weekday))return next.dateKey;}return null;}
+export function remainingUsageToday(hour,minute=0){const captured=Number(hour)+Number(minute||0)/60;if(captured>=22)return 0;if(captured>=21)return .1;if(captured>=19)return .3;if(captured>=12)return .5;if(captured>=11)return .7;return 1;}
+const compactCode=value=>String(value??'').replace(/\D/g,'').replace(/^0+(?=\d)/,'');
+const canonicalWoeUnit=value=>{const unit=normalize(value).toUpperCase();if(['CJA','CAJA','CAJ'].includes(unit))return'CAJ';if(['UND','UN','UNIDAD','PIEZA','PIEZAS','PZA','PZ'].includes(unit))return'PZA';if(['PQT','PQTE','PAQUETE','PAQ'].includes(unit))return'PQT';if(['BOT','BOTE','BOTELLA','BTL','BTE'].includes(unit))return'BTE';if(['BOLSA','BSA','BOL'].includes(unit))return'BOL';if(['ROLLO','ROL'].includes(unit))return'ROL';if(['GALON','GAL'].includes(unit))return'GAL';if(['LITRO','LITROS','LT','L'].includes(unit))return'LT';return unit;};
+function uniqueCodeIndex(items,field){const index=new Map();for(const item of items){const code=compactCode(field(item));if(!code)continue;if(index.has(code)&&index.get(code)?.key!==item.key)index.set(code,null);else index.set(code,item);}return index;}
+export function reconcileTransit(items,orders=[]){
+ const bySap=uniqueCodeIndex(items,item=>item.woe?.sap),byDia=uniqueCodeIndex(items,item=>item.woe?.dia),byItem=new Map(),unmatched=[],conflicts=[];let matchedLines=0,matchedUnits=0;
+ for(const order of orders){for(const line of order.lines||[]){const sap=compactCode(line.sap),dia=compactCode(line.material),sapItem=sap?bySap.get(sap):null,diaItem=dia?byDia.get(dia):null;
+  if(sapItem&&diaItem&&sapItem.key!==diaItem.key){conflicts.push({order,line,reason:'SAP y DIA apuntan a artículos distintos'});continue;}
+  const item=sapItem||diaItem;if(!item){unmatched.push({order,line,reason:'Sin coincidencia SAP/DIA'});continue;}
+  const expectedSap=compactCode(item.woe?.sap),expectedDia=compactCode(item.woe?.dia);
+  if((sap&&expectedSap&&sap!==expectedSap)||(dia&&expectedDia&&dia!==expectedDia)){conflicts.push({order,line,item,reason:'Cruce parcial con códigos contradictorios'});continue;}
+  const received=canonicalWoeUnit(line.unit),orderUnit=canonicalWoeUnit(item.woe?.ump),operational=canonicalWoeUnit(item.unit),quantity=numberValue(line.quantity),pack=Math.max(1,Number(item.p?.woePack)||1);let units=null;
+  if(quantity!==null&&quantity>=0){if(received&&received===orderUnit)units=Math.ceil(quantity*pack-1e-9);else if(received&&received===operational)units=Math.ceil(quantity-1e-9);else if(received==='PZA')units=Math.ceil(quantity-1e-9);}
+  if(units===null){conflicts.push({order,line,item,reason:`Unidad ${line.unit||'—'} incompatible`});continue;}
+  const entry={purchaseOrder:order.purchaseOrder,deliveryDate:order.deliveryDate,provider:order.providerAlias||order.provider,quantity:units,sourceQuantity:quantity,sourceUnit:line.unit,sourceName:order.sourceName};
+  if(!byItem.has(item.key))byItem.set(item.key,[]);byItem.get(item.key).push(entry);matchedLines++;matchedUnits+=units;
+ }}
+ return {byItem,matchedLines,matchedUnits,unmatched,conflicts,totalLines:orders.reduce((total,order)=>total+(order.lines?.length||0),0)};
+}
 export function calculateOrder(item,input={},settings={}){
  const weekdays=(settings.receptions||[]).map(Number),next=weekdays.length?nextReception(settings.delivery,weekdays):null;
- const end=next||settings.delivery,coverage=coverageDays(settings.today,end,settings.fraction??1),stock=numberValue(input.stock),transit=numberValue(input.transit);
+ const end=next||settings.delivery,coverage=coverageDays(settings.today,end,settings.fraction??1),stock=numberValue(input.stock),manualTransit=numberValue(input.transit),transits=Array.isArray(input.transits)?input.transits:null;
  const reasons=item.blocked?[item.reason]:[];
  if(!dateParts(settings.today)||!dateParts(settings.delivery)||settings.delivery<settings.today||coverage===null)reasons.push('Define fechas de pedido');
  if(stock===null||stock<0)reasons.push('Captura existencia');
- if((input.transit!==undefined&&input.transit!==null&&input.transit!==''&&transit===null)||(transit!==null&&transit<0)||(transit>0&&(!dateParts(input.transitDate)||input.transitDate<settings.today||input.transitDate>end)))reasons.push('Revisa fecha de tránsito');
+ if(!transits&&((input.transit!==undefined&&input.transit!==null&&input.transit!==''&&manualTransit===null)||(manualTransit!==null&&manualTransit<0)||(manualTransit>0&&(!dateParts(input.transitDate)||input.transitDate<settings.today||input.transitDate>end))))reasons.push('Revisa fecha de tránsito');
+ if(transits?.some(entry=>!dateParts(entry.deliveryDate)||numberValue(entry.quantity)===null||Number(entry.quantity)<0))reasons.push('Revisa PDF de tránsito');
+ const transit=transits?sum(transits.filter(entry=>entry.deliveryDate>=settings.today&&entry.deliveryDate<=end),entry=>Math.max(0,Number(entry.quantity)||0)):(manualTransit||0);
  const demand=coverage===null?null:Math.max(0,item.minimum)*coverage,available=Math.max(0,stock||0)+(transit||0);
  const missing=demand===null?null:Math.max(0,demand-available),suggested=missing!==null&&item.p.woePack?epsCeil(missing/item.p.woePack):null;
  const captured=numberValue(input.order),quantity=captured===null?suggested:captured;
  if((input.order!==undefined&&input.order!==null&&input.order!==''&&captured===null)||(captured!==null&&(!Number.isInteger(captured)||captured<0||suggested===null||captured>suggested)))reasons.push('Pedido excede sugerido o no es entero');
- return {item,end,coverage,demand,stock,transit:transit||0,available,missing,suggested,quantity,blocked:reasons.length>0,reason:reasons.join(' · ')};
+ return {item,end,coverage,demand,stock,transit:transit||0,transits:transits||[],available,missing,suggested,quantity,blocked:reasons.length>0,reason:reasons.join(' · ')};
 }
 
 export function peakHour(d,f={}){
@@ -248,7 +269,16 @@ export function reportFor(module,result,context={}){
   if(focus){report.focusName=focus.sapName;report.filters=[`Producto: ${focus.sapName}`,report.filters].filter(Boolean).join(' · ');sheet('Tendencia semanal',['Semana','Días observados','Promedio diario'],focus.weeks.map(w=>[`${shortDate(w.week)} - ${shortDate(new Date(dateParts(w.week).dayMs+6*DAY_MS).toISOString().slice(0,10))}`,w.days,w.average]));sheet('Promedio por día',['Día','Días observados','Promedio diario'],focus.weekday.map(day=>[day.name,day.days,day.average]));}
   sheet('Uso por producto',['Descripción SAP','Nombre Micros','#DIA','#SAP','Unidad','Uso total','Promedio diario'],r.items.map(i=>[i.sapName,i.microsName,i.woe?.dia||'',i.woe?.sap||'',i.unit,i.totalUse,i.average]));
  }
- if(module==='order'){report.summary=[['Días observados',r.days],['Artículos bloqueados',r.excluded]];const ready=(context.orders||[]).filter(x=>!x.blocked&&x.quantity>0);sheet('Pedido',['Producto','SAP','DIA','Proveedor','Unidad WOE','Cantidad','Existencia','Tránsito','Cobertura hasta'],ready.map(x=>[x.item.name,x.item.woe.sap,x.item.woe.dia,x.item.woe.provider,x.item.woe.ump,x.quantity,x.stock,x.transit,x.end]));sheet('Base del pedido',['Producto','Base de uso','Unidad de captura','Uso diario','Días de cobertura','Demanda','Faltante'],ready.map(x=>[x.item.name,x.item.usageSource||'Uso ideal _ac',x.item.unit,x.item.minimum,x.coverage,x.demand,x.missing]));}
+ if(module==='order'){
+  const reviewed=(context.orders||[]).filter(x=>x.stock!==null&&x.stock>=0),ready=reviewed.filter(x=>!x.blocked&&x.quantity>0),transitOrders=context.transitOrders||[],audit=context.transitAudit||{unmatched:[],conflicts:[]},settings=context.orderSettings||{};
+  report.layout='order-woe';report.hideSummary=true;report.operationalHeader=true;report.generatedAt=settings.today||new Date().toISOString().slice(0,10);report.period=settings.today&&settings.delivery?`${shortDate(settings.today)} - ${shortDate(settings.delivery)}`:shortPeriod(r.from,r.to);report.orders=`${ready.length} art. · ${sum(ready,'quantity')} uds.`;report.summary=[['Artículos revisados',reviewed.length],['Artículos por pedir',ready.length],['Unidades WOE',sum(ready,'quantity')]];
+  report.transitColumns=transitOrders.map(order=>({key:String(order.purchaseOrder),deliveryDate:order.deliveryDate,purchaseOrder:String(order.purchaseOrder),provider:order.providerAlias||order.provider}));
+  report.orderRows=reviewed.map(x=>{const transitByOrder=Object.fromEntries(report.transitColumns.map(column=>[column.key,sum(x.transits.filter(entry=>String(entry.purchaseOrder)===column.key),'quantity')]));return {sap:x.item.woe?.sap||'',dia:x.item.woe?.dia||'',sapDescription:x.item.sapName||x.item.name,microsDescription:x.item.microsName||x.item.name,stock:x.stock,transitByOrder,quantity:x.blocked?'—':x.quantity??0,quantityLabel:x.blocked?'REVISAR':`${x.quantity??0} ${x.item.woe?.ump||'Unidad'}`,status:x.blocked?x.reason:x.quantity>0?'Por pedir':'Sin pedido',unit:x.item.woe?.ump||'',operationalUnit:x.item.unit||'PZA',coverageEnd:x.end};});
+  const transitHeaders=report.transitColumns.map(column=>`Tránsito ${shortDate(column.deliveryDate)} #${column.purchaseOrder.slice(-6)}`);
+  report.sheets.push({name:'Pedido WOE',headers:['#SAP','#DIA','Descripción SAP','Nombre Micros',...transitHeaders,'Existencia física','Cantidad a pedir','Unidad WOE','Estado'],rows:report.orderRows.map(row=>[row.sap,row.dia,row.sapDescription,row.microsDescription,...report.transitColumns.map(column=>row.transitByOrder[column.key]||0),row.stock,typeof row.quantity==='number'?row.quantity:'',row.unit,row.status]),formats:[null,null,null,null,...report.transitColumns.map(()=> 'oneDecimal'),'oneDecimal','integer',null,null],widths:[14,14,34,30,...report.transitColumns.map(()=>18),17,17,15,28]});
+  if(transitOrders.length)sheet('Pedidos en tránsito',['Núm. pedido','Entrega','Proveedor','Archivo','Líneas'],transitOrders.map(order=>[order.purchaseOrder,order.deliveryDate,order.providerAlias||order.provider,order.sourceName,order.lines?.length||0]));
+  const issues=[...(audit.conflicts||[]),...(audit.unmatched||[])];if(issues.length)sheet('Cruces por revisar',['Núm. pedido','Entrega','#DIA / Material','#SAP','Descripción PDF','Cantidad','Unidad','Motivo'],issues.map(issue=>[issue.order.purchaseOrder,issue.order.deliveryDate,issue.line.material,issue.line.sap,issue.line.description,issue.line.quantity,issue.line.unit,issue.reason]));
+ }
  if(module==='peak'){report.summary=[['Órdenes',r.orders],['Días observados',r.days],['Peak AM',r.am?.label||'Sin demanda'],['Promedio AM',r.am?.average??null],['Peak PM',r.pm?.label||'Sin demanda'],['Promedio PM',r.pm?.average??null]];sheet('Medias horas',['Franja','Órdenes totales','Promedio',...DAY_LABELS],r.slots.map(x=>[x.label,x.total,x.average,...x.weekday]));sheet('Días comparables',['Día','Días','Peak AM','Promedio AM','Peak PM','Promedio PM'],r.weekday.map(x=>[x.day,x.days,x.am?.label||'',x.am?.average??null,x.pm?.label||'',x.pm?.average??null]));}
  if(module==='normal'){
   report.summary=[['Bebidas en vaso',sum(r.sizes,x=>x.hot+x.cold)],['FHW (sin desechable)',r.fhw],['Devoluciones separadas',r.returns],['Productos sin regla',r.unknown.length]];

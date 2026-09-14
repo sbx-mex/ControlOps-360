@@ -72,6 +72,15 @@ class SitioPublicoTests(unittest.TestCase):
     def test_separate_module_flows(self):
         for name in ("maxminView", "trendView", "orderView", "peakView", "normalView", "bakingView", "topView", "auditView", "aboutView"):
             self.assertIn("function " + name, self.ui)
+    def test_pedido_woe_is_guided_and_removes_obsolete_controls(self):
+        order = self.ui.split("function orderView(){", 1)[1].split("function peakView(){", 1)[0]
+        for token in ("Pedido en tránsito", "transitPdfInput", "Cantidad a pedir", "Cuenta lo que tienes físicamente", "normalizedCups:true"):
+            self.assertIn(token, order)
+        for obsolete in ("Uso pendiente hoy", "Base de vasos", "Referencia de uso", "SAP/DIA validados", "Artículos en pedido", "No aplican / sin cruce"):
+            self.assertNotIn(obsolete, order)
+        self.assertIn("parseOrderPdf", self.ui)
+        self.assertTrue((ROOT / "assets" / "vendor" / "pdf.min.mjs").is_file())
+        self.assertTrue((ROOT / "assets" / "vendor" / "pdf.worker.min.mjs").is_file())
     def test_no_diagnostics_or_demo(self):
         for token in ("Exportar diagnóstico", "demoButton", "archivo_patron"):
             self.assertNotIn(token, self.html + self.ui)

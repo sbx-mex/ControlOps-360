@@ -211,10 +211,27 @@ function createMaxMinListPdf(report){
  }
  return pdfFromPages(pages);
 }
+function splitEvery(items,size){const groups=[];for(let index=0;index<items.length;index+=size)groups.push(items.slice(index,index+size));return groups.length?groups:[[]];}
+function createOrderWoePdf(report){
+ if(!report.orderRows?.length)throw new Error('Captura al menos una existencia antes de exportar.');
+ const TABLE_X=28,TABLE_WIDTH=736,CODE_WIDTH=84,ORDER_WIDTH=96,TRANSIT_WIDTH=78,ROWS_PER_PAGE=13,TRANSIT_PER_PAGE=4,pages=[];
+ const rowGroups=splitEvery(report.orderRows,ROWS_PER_PAGE),transitGroups=splitEvery(report.transitColumns||[],TRANSIT_PER_PAGE),pageData=rowGroups.flatMap(rows=>transitGroups.map(transit=>({rows,transit})));
+ pageData.forEach(({rows,transit},pageIndex)=>{const commands=[],text=(x,y,size,value,bold=false,align='left',tone='dark')=>{const rendered=String(value??''),at=align==='center'?x-rendered.length*size*.27:x,color=tone==='white'?'1 1 1':tone==='green'?'0 0.38 0.25':'0.06 0.12 0.10';commands.push(`BT /F${bold?2:1} ${size} Tf ${color} rg ${at} ${y} Td (${pdfEscape(rendered)}) Tj ET`);};
+  drawOperationalHeader(commands,text,report);text(28,551,13,'PEDIDO WOE · REVISIÓN OPERATIVA',true);text(28,536,7.2,'Cuenta existencia física; el tránsito del PDF se descuenta automáticamente.',false);
+  const descriptionWidth=TABLE_WIDTH-CODE_WIDTH-ORDER_WIDTH-transit.length*TRANSIT_WIDTH,descriptionX=TABLE_X+CODE_WIDTH,transitX=descriptionX+descriptionWidth,orderX=transitX+transit.length*TRANSIT_WIDTH;
+  commands.push(`0 0.38 0.25 rg ${TABLE_X} 496 ${TABLE_WIDTH} 29 re f`);text(TABLE_X+5,509,6.4,'#SAP / DIA',true,'left','white');text(descriptionX+5,509,6.4,'DESCRIPCIÓN SAP / MICROS',true,'left','white');
+  transit.forEach((column,index)=>{const x=transitX+index*TRANSIT_WIDTH;text(x+TRANSIT_WIDTH/2,513,5.6,'TRÁNSITO',true,'center','white');text(x+TRANSIT_WIDTH/2,502,5.2,`${shortPdfDate(column.deliveryDate)} #${String(column.purchaseOrder).slice(-6)}`,true,'center','white');});text(orderX+ORDER_WIDTH/2,513,6,'CANTIDAD',true,'center','white');text(orderX+ORDER_WIDTH/2,502,6,'A PEDIR',true,'center','white');
+  let y=477;rows.forEach((row,rowIndex)=>{const bottom=y-17;if(rowIndex%2)commands.push(`0.97 0.98 0.97 rg ${TABLE_X} ${bottom} ${TABLE_WIDTH} 30 re f`);text(TABLE_X+5,y+2,6.4,`SAP ${clipped(row.sap||'—',CODE_WIDTH-10,6.4)}`,true);text(TABLE_X+5,y-9,6.1,`DIA ${clipped(row.dia||'—',CODE_WIDTH-10,6.1)}`);text(descriptionX+5,y+2,6.6,clipped(row.sapDescription,descriptionWidth-10,6.6),true);text(descriptionX+5,y-9,6.1,clipped(row.microsDescription,descriptionWidth-10,6.1));transit.forEach((column,index)=>{const value=row.transitByOrder?.[column.key]||0;text(transitX+index*TRANSIT_WIDTH+TRANSIT_WIDTH/2,y-4,6.4,value?`${NUMBER.format(value)} ${row.operationalUnit||''}`:'—',Boolean(value),'center');});text(orderX+ORDER_WIDTH/2,y-4,7,row.quantityLabel,true,'center');commands.push(`0.86 0.90 0.87 RG 0.3 w ${TABLE_X} ${bottom} m ${TABLE_X+TABLE_WIDTH} ${bottom} l S`);y-=31;});
+  const separators=[descriptionX,transitX,orderX];transit.forEach((_,index)=>separators.push(transitX+(index+1)*TRANSIT_WIDTH));for(const x of new Set(separators))commands.push(`0.82 0.87 0.84 RG 0.3 w ${x} ${Math.max(58,y+14)} m ${x} 525 l S`);
+  if((report.transitColumns||[]).length>TRANSIT_PER_PAGE){const first=(report.transitColumns||[]).indexOf(transit[0])+1,last=first+transit.length-1;text(28,34,6.5,`Remisiones ${first}-${last} de ${report.transitColumns.length}`,true,'left','green');}text(480,34,6.2,'Diseñado por Jorge Alcantar Aguiar & Enrique César Flores');pages.push(commands.join('\n'));});
+ return pdfFromPages(pages);
+}
+function shortPdfDate(value){const match=/^\d{4}-(\d{2})-(\d{2})$/.exec(String(value||''));return match?`${match[2]}/${match[1]}`:'—';}
 export function createExecutivePdf(report) {
  if(!report?.sheets?.length)throw new Error("Este menú no tiene datos exportables.");
  if(report.layout==='labels')return createLabelPdf(report);
  if(report.layout==='maxmin-list')return createMaxMinListPdf(report);
+ if(report.layout==='order-woe')return createOrderWoePdf(report);
  const pages=[];let commands=[],y=0;
  const text=(x,y,size,value,bold=false)=>commands.push(`BT /F${bold?2:1} ${size} Tf 0.06 0.16 0.13 rg ${x} ${y} Td (${pdfEscape(value)}) Tj ET`);
  const newPage=()=>{if(commands.length)pages.push(commands.join("\n"));commands=[];if(report.operationalHeader){const headerText=(x,at,size,value,bold=false,align='left',tone='dark')=>{const px=align==='center'?x-String(value??'').length*size*.27:x,color=tone==='green'?'0 0.38 0.25':'0.06 0.12 0.10';commands.push(`BT /F${bold?2:1} ${size} Tf ${color} rg ${px} ${at} Td (${pdfEscape(value)}) Tj ET`);};drawOperationalHeader(commands,headerText,report);text(28,550,13,report.title,true);if(report.filters)text(28,536,7,report.filters);y=516;}else{text(32,579,18,report.title,true);text(32,560,9,report.store+" · "+report.period);text(32,542,8,report.filters||"");y=522;}};
