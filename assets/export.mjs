@@ -183,17 +183,23 @@ function createLabelPdf(report){
  const columns=3,rows=4,perPage=12,pages=[],margin=18,gapX=6,gapY=5,gridTop=566,gridBottom=27,cardW=(792-margin*2-gapX*(columns-1))/columns,cardH=(gridTop-gridBottom-gapY*(rows-1))/rows;
  for(let start=0;start<report.cards.length;start+=perPage){const commands=[],pageCards=report.cards.slice(start,start+perPage),text=(x,y,size,value,bold=false,align='left',tone='dark')=>{const at=align==='center'?x-String(value??'').length*size*.27:x,color=tone==='green'?'0 0.38 0.25':'0.06 0.12 0.10';commands.push(`BT /F${bold?2:1} ${size} Tf ${color} rg ${at} ${y} Td (${pdfEscape(value)}) Tj ET`);};
   drawOperationalHeader(commands,text,report);
-  pageCards.forEach((card,index)=>{const row=Math.floor(index/columns),col=index%columns,x=margin+col*(cardW+gapX),top=gridTop-row*(cardH+gapY),bottom=top-cardH,topHeight=53,footerHeight=18,bodyTop=top-topHeight,bodyBottom=bottom+footerHeight;
-   commands.push(`0.08 0.12 0.10 RG 0.85 w ${x} ${bottom} ${cardW} ${cardH} re S`);
-   wrap(card.sapName||card.name,cardW-16,8.1).slice(0,2).forEach((line,lineIndex)=>text(x+8,top-15-lineIndex*10,8.1,line,true));
+  pageCards.forEach((card,index)=>{const row=Math.floor(index/columns),col=index%columns,x=margin+col*(cardW+gapX),top=gridTop-row*(cardH+gapY),bottom=top-cardH,topHeight=49,footerHeight=18,bodyTop=top-topHeight,bodyBottom=bottom+footerHeight;
+   commands.push(`0.08 0.12 0.10 RG 0.85 w ${x} ${bottom} ${cardW} ${cardH} re S`,`0 0.38 0.25 RG 1.2 w ${x} ${top-1} m ${x+cardW} ${top-1} l S`);
+   const titleLines=wrap(card.sapName||card.name,cardW-16,8.1).slice(0,2);
+   titleLines.forEach((line,lineIndex)=>text(x+8,top-14-lineIndex*9.5,8.1,line,true));
    const identity=`${card.microsName||'—'} | #DIA ${card.dia||'—'} | #SAP ${card.sap||'—'}${card.adjusted?' | AJUSTADO':''}`;
-   text(x+cardW/2,top-46,5.3,clipped(identity,cardW-16,5.3),false,'center');
+   text(x+cardW/2,top-(titleLines.length>1?42:34),5.3,clipped(identity,cardW-16,5.3),false,'center');
    commands.push(`0.08 0.12 0.10 RG 0.65 w ${x} ${bodyTop} m ${x+cardW} ${bodyTop} l S ${x+cardW/2} ${bodyTop} m ${x+cardW/2} ${bodyBottom} l S ${x} ${bodyBottom} m ${x+cardW} ${bodyBottom} l S`);
    text(x+cardW*.25,bodyTop-17,7,'MIN',true,'center');text(x+cardW*.75,bodyTop-17,7,'MAX',true,'center');
    text(x+cardW*.25,bodyBottom+14,17,card.minimum==null?'—':NUMBER.format(card.minimum),true,'center');text(x+cardW*.75,bodyBottom+14,17,card.maximum==null?'—':NUMBER.format(card.maximum),true,'center');
-   const third=cardW/3,mode=card.mode==='pack'?'PICK PACK':card.mode==='sleeve'?'MANGA':'UNIDAD',pieces=card.piecesPerCase?`${NUMBER.format(card.piecesPerCase)} PZ / CAJA`:'PZ / CAJA —';
-   commands.push(`0.75 0.82 0.78 RG 0.35 w ${x+third} ${bottom} m ${x+third} ${bodyBottom} l S ${x+third*2} ${bottom} m ${x+third*2} ${bodyBottom} l S`);
-   text(x+third*.5,bottom+6,5.8,mode,true,'center','green');text(x+third*1.5,bottom+6,5.8,clipped(pieces,third-8,5.8),false,'center');text(x+third*2.5,bottom+6,5.8,`${card.orders??'—'} PEDIDOS`,true,'center');
+   const mode=card.mode==='pack'?'PICK PACK':card.mode==='sleeve'?'MANGA':'UNIDAD';
+   if(card.mode==='unit'){
+    const split=cardW*.66;commands.push(`0.75 0.82 0.78 RG 0.35 w ${x+split} ${bottom} m ${x+split} ${bodyBottom} l S`);
+    text(x+split/2,bottom+6,5.8,mode,true,'center','green');text(x+split+(cardW-split)/2,bottom+6,5.8,`${card.orders??'—'} PEDIDOS / SEM`,true,'center');
+   }else{
+    const third=cardW/3,pieces=`${NUMBER.format(card.piecesPerCase)} PZ / CAJA`;commands.push(`0.75 0.82 0.78 RG 0.35 w ${x+third} ${bottom} m ${x+third} ${bodyBottom} l S ${x+third*2} ${bottom} m ${x+third*2} ${bodyBottom} l S`);
+    text(x+third*.5,bottom+6,5.8,mode,true,'center','green');text(x+third*1.5,bottom+6,5.8,clipped(pieces,third-8,5.8),false,'center');text(x+third*2.5,bottom+6,5.8,`${card.orders??'—'} PEDIDOS / SEM`,true,'center');
+   }
   });pages.push(commands.join('\n'));
  }
  return pdfFromPages(pages);

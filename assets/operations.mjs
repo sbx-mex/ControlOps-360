@@ -12,7 +12,7 @@ export const MODULES=[
  {id:'audit',name:'Auditoría tienda',caption:'Órdenes negativas por revisar',icon:'◇',type:'audit'},
 ];
 export function availableModules(d){return MODULES.filter(m=>m.type==='audit'?d.sourceTypes.has('auditTicket')||d.sourceTypes.has('auditVoid'):m.type==='usage'?d.usageFacts.length:d.salesFacts.length&&(m.id==='peak'||d.productCatalog.size));}
-export function filterFacts(facts,f={}){const weeks=Array.isArray(f.weeks)?f.weeks.filter(Boolean):[];return facts.filter(r=>(!f.store||r.store===f.store)&&(!f.from||r.dateKey>=f.from)&&(!f.to||r.dateKey<=f.to)&&(!f.week||weekKey(r.dateKey)===f.week)&&(!weeks.length||weeks.includes(weekKey(r.dateKey)))&&(f.weekday==null||f.weekday===''||r.weekday===Number(f.weekday))&&(!f.mode||r.mode===f.mode));}
+export function filterFacts(facts,f={}){const weeks=Array.isArray(f.weeks)?f.weeks.filter(Boolean):[],weekdays=Array.isArray(f.weekdays)?f.weekdays.filter(value=>value!==''&&value!=null).map(Number):[];return facts.filter(r=>(!f.store||r.store===f.store)&&(!f.from||r.dateKey>=f.from)&&(!f.to||r.dateKey<=f.to)&&(!f.week||weekKey(r.dateKey)===f.week)&&(!weeks.length||weeks.includes(weekKey(r.dateKey)))&&(f.weekday==null||f.weekday===''||r.weekday===Number(f.weekday))&&(!weekdays.length||weekdays.includes(r.weekday))&&(!f.mode||r.mode===f.mode));}
 export const sum=(a,key)=>a.reduce((s,r)=>s+(typeof key==='function'?key(r):r[key]||0),0);
 export const clock=slot=>`${String(Math.floor(slot/2)).padStart(2,'0')}:${slot%2?'30':'00'}`;
 const epsCeil=v=>Math.ceil(v-0.00001);
@@ -122,9 +122,18 @@ export function sleeveFor(item){
  const size=paper20?40:50;
  return {kind:'Vaso',size,label:`Manga ${size} pzas`};
 }
+export function packSizeFor(item){
+ for(const value of [item?.p?.stockPack,item?.p?.woePack]){const size=Number(value);if(Number.isFinite(size)&&size>1)return size;}
+ return null;
+}
+export function resolvePresentationMode(item,mode='unit'){
+ if(mode==='sleeve'&&sleeveFor(item))return 'sleeve';
+ if(mode==='pack'&&packSizeFor(item))return 'pack';
+ return 'unit';
+}
 export function minmaxValues(item,mode='unit'){
- const sleeve=sleeveFor(item),pack=mode==='sleeve'?sleeve?.size:(item.p.stockPack||item.p.woePack);
- if(mode==='unit')return {minimum:item.minimum,maximum:item.maximum,unit:item.unit,packSize:1};
+ const sleeve=sleeveFor(item),pack=mode==='sleeve'?sleeve?.size:packSizeFor(item);
+ if(mode==='unit')return {minimum:item.minimum,maximum:item.maximum,unit:item.unit,packSize:null};
  const label=mode==='sleeve'?sleeve?.label:(item.stock?.pickPack||item.woe?.ump||'Pick Pack sin validar');
  return {minimum:pack?epsCeil(item.minimum/pack):null,maximum:pack?epsCeil(item.maximum/pack):null,unit:label||'Pick Pack sin validar',packSize:pack||null};
 }
@@ -252,13 +261,13 @@ export function reportFor(module,result,context={}){
  if(module==='maxmin'){
   const selected=new Set(context.selectedKeys||[]),items=selected.size?r.items.filter(i=>selected.has(i.key)):[],priority=new Map(r.items.map((i,index)=>[i.key,index+1]));
   report.layout=context.outputView==='list'?'maxmin-list':'labels';report.hideSummary=true;report.operationalHeader=true;report.orders=r.orders;report.summary=[['Productos seleccionados',items.length],['Días observados',r.days],['Pedidos por semana',r.orders]];
-  const cards=items.map(i=>{const mode=context.modes?.[i.key]||context.mode||'unit',c=minmaxValues(i,mode),piecesPerCase=mode==='sleeve'?sleeveFor(i)?.size:(i.p.stockPack||i.p.woePack);return {...c,name:i.sapName,sapName:i.sapName,microsName:i.microsName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',daily:i.minimum,mode,orders:r.orders,priority:priority.get(i.key),piecesPerCase,adjusted:i.adjusted};});
+  const cards=items.map(i=>{const mode=resolvePresentationMode(i,context.modes?.[i.key]||context.mode||'unit'),c=minmaxValues(i,mode),piecesPerCase=mode==='sleeve'?sleeveFor(i)?.size:mode==='pack'?packSizeFor(i):null;return {...c,name:i.sapName,sapName:i.sapName,microsName:i.microsName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',daily:i.minimum,mode,orders:r.orders,priority:priority.get(i.key),piecesPerCase,adjusted:i.adjusted};});
   if(report.layout==='labels')report.cards=cards;
   else report.listCards=cards.map((card,index)=>({...card,priority:priority.get(items[index].key),family:items[index].family}));
-  report.sheets.push({name:'Uso Unidad',headers:['Descripción SAP','Nombre Micros','#DIA','#SAP','Min','Max','Unidad / Pick Pack','Pz / Caja','# Pedido'],rows:items.map(i=>[i.sapName,i.microsName,i.woe?.dia||'',i.woe?.sap||'',Number(i.minimum.toFixed(1)),Number(i.maximum.toFixed(1)),'Unidad',i.p.stockPack||i.p.woePack||'',r.orders]),formats:[null,null,null,null,'oneDecimal','oneDecimal',null,'integer','integer'],widths:[38,32,14,14,12,12,22,14,13]});
+  report.sheets.push({name:'Uso Unidad',headers:['Descripción SAP','Nombre Micros','#DIA','#SAP','Min','Max','Unidad / Pick Pack','Pz / Caja','# Pedido'],rows:items.map(i=>[i.sapName,i.microsName,i.woe?.dia||'',i.woe?.sap||'',Number(i.minimum.toFixed(1)),Number(i.maximum.toFixed(1)),'Unidad','',r.orders]),formats:[null,null,null,null,'oneDecimal','oneDecimal',null,'integer','integer'],widths:[38,32,14,14,12,12,22,14,13]});
   const packRows=[];
   for(const i of items){
-   const base={name:i.sapName,micros:i.microsName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',orders:r.orders},pack=minmaxValues(i,'pack'),candidates=[{format:'Pick Pack',values:pack}];
+   const base={name:i.sapName,micros:i.microsName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',orders:r.orders},pack=minmaxValues(i,'pack'),candidates=pack.packSize?[{format:'Pick Pack',values:pack}]:[];
    const sleeve=sleeveFor(i);if(sleeve&&sleeve.size!==pack.packSize)candidates.push({format:'Manga',values:minmaxValues(i,'sleeve')});
    for(const candidate of candidates){const c=candidate.values;packRows.push([base.name,base.micros,base.dia,base.sap,c.minimum??'',c.maximum??'',candidate.format,c.packSize||'',base.orders]);}
   }

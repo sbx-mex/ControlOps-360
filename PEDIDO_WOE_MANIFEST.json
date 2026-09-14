@@ -3,14 +3,14 @@
   "version": "5.4.0",
   "date": "2026-09-14",
   "scope": "Pedido WOE",
-  "baseline": "7ed825189074adab31baa996df40076dcbd193b3",
+  "baseline": "acfe52dbf6db10d9af95b42bd66545461860ec0f",
   "reference_project": {
     "repository": "sbx-mex/WOE_Gestion_Inventario",
     "reviewed_commit": "a8b9b52edbb77f315c0bb273281b13dfd036880e"
   },
   "verification": {
     "status": "GREEN",
-    "javascript_tests": {"passed": 66, "failed": 0},
+    "javascript_tests": {"passed": 67, "failed": 0},
     "python_tests": {"passed": 28, "failed": 0},
     "cross_scenarios": {"passed": 19, "failed": 0},
     "catalog": {
@@ -32,19 +32,19 @@
     "VERSION": "299be6bed159ae2783b200cd9d3cd8111b8133367dbee8d6b2c1a227a053f860",
     "index.html": "e1a98e4d0cf9ff908aa388d1cf5625ea59d70a480090c1ee53c7aa965e1d8cea",
     "ACTUALIZACION_PEDIDO_WOE.md": "6ccc4b0cf9587f7caad288bb7bc10f5a20a0f095ccacc982159545fbd713f1a5",
-    "assets/ui.mjs": "fe3fe4c48ace33e12e8d91fedca5f22cc7b663506c358c755384e664a7c6cd7d",
-    "assets/styles.css": "40e8c2475978bdf16e1f597056afaad2dc57bd353dd19c38c988702ab28bc4a8",
-    "assets/operations.mjs": "5f02df8f68b0753a0fa2e3c66b11c7226ee5a63b565e72fda808fdf928110314",
+    "assets/ui.mjs": "5dacae56c462e7e2ce24f14204f73b6f060bbf576617975b5142e3039092b452",
+    "assets/styles.css": "88960df472deabc4bbb78a4ae77beaa1bdb66ad95139fa9ce0b646d25e023b12",
+    "assets/operations.mjs": "61f94445ff788483ab282e2518f2866ecc7923aa9c278797ba927377d86abbeb",
     "assets/transit.mjs": "3f125fe41430df3a2e443a365d02b49c703a30984d32892abc1ac1979ae8ca86",
-    "assets/export.mjs": "dba67630a05d480adf785d57dfeab027d6a2968bfb68b1936e28cbde2af8afe2",
+    "assets/export.mjs": "d021cd2d990e1b8c78d0eaefdfe709984e9ad21a20e42a5a2823b6cd916c7cc3",
     "assets/vendor/pdf.min.mjs": "2221020ea508479dcc1221f36f2731656339230097c69ba1f78802832c0ad685",
     "assets/vendor/pdf.worker.min.mjs": "51a2fd1ea47f1a9b0814e65e0c336c739c54957795ee774e8f93cb81e8028dd1",
     "assets/vendor/PDFJS-LICENSE.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
     "scripts/auditar_pedido_woe.py": "60f42a0dd3f431a8a69cbdc869b75c099822b3d0f12209636d1ee958ca010034",
-    "tests/engine.test.mjs": "86768bc860c4aa5ccd05686dfa9945907f412f94b0dfb6d2d0b18e33e8308e72",
-    "tests/export.test.mjs": "6dbe3f0e568561495226f49e24cf4a61b47559ccd68b11f6e8e8bfefefe589ed",
+    "tests/engine.test.mjs": "afe5af973116de2fb5b69dcb8d9f020c5a5f46647365514706c81cf77257b50e",
+    "tests/export.test.mjs": "5051c823f0955921984cec40df6b80c82cac8377227e803e8df1b948a82e0b4c",
     "tests/transit.test.mjs": "a0a0619883a5a84e075ad7e811f9494b57be77c2e329d074dcb9663084ae5e3b",
     "tests/test_pedido_woe.py": "56b78edd67dcfe266c5a70e8ac24fb83b304809dcbbf650966bf4a1400b9a486",
-    "tests/test_site_publico.py": "e98364d1acae34703e135f342523e8ec90ca428390a0a3f4a7b050cce05d44de"
+    "tests/test_site_publico.py": "091b0e3703967f40675294676bac67c0b4c0dd75d50e8bdaf3b4d4672d4fd6cf"
   }
 }
