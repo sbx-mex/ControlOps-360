@@ -9,10 +9,9 @@ export const MODULES=[
  {id:'normal',name:'Normalizados',caption:'Tamaños, vasos y crema',icon:'◉',type:'sales'},
  {id:'baking',name:'Bitácora de horneo',caption:'Previsión y próximas tandas',icon:'♨',type:'sales'},
  {id:'top',name:'Top Bebidas & Alimentos',caption:'Ranking y mezcla semanal',icon:'≡',type:'sales'},
- {id:'effort',name:'Esfuerzo Operativo',caption:'USD y UPT de productos de impulso',icon:'◆',type:'sales'},
- {id:'audit',name:'Auditoría tienda',caption:'Órdenes negativas por revisar',icon:'◇',type:'audit'},
+ {id:'audit',name:'Voids · Auditoría',caption:'Foco y desglose por ticket',icon:'◇',type:'audit'},
 ];
-export function availableModules(d){return MODULES.filter(m=>m.type==='audit'?d.sourceTypes.has('auditTicket')||d.sourceTypes.has('auditVoid'):m.type==='usage'?d.usageFacts.length:d.salesFacts.length&&(m.id==='peak'||m.id==='effort'||d.productCatalog.size));}
+export function availableModules(d){return MODULES.filter(m=>m.type==='audit'?['auditTicket','auditVoid','auditLegacy'].some(type=>d.sourceTypes.has(type)):m.type==='usage'?d.usageFacts.length:d.salesFacts.length&&(m.id==='peak'||d.productCatalog.size));}
 export function filterFacts(facts,f={}){
  const weeks=Array.isArray(f.weeks)?f.weeks.filter(Boolean):[],weekdays=Array.isArray(f.weekdays)?f.weekdays.filter(v=>v!==''&&v!=null).map(Number):[],modes=Array.isArray(f.modes)?f.modes.filter(Boolean):[];
  return facts.filter(r=>(!f.store||r.store===f.store)&&(!f.from||r.dateKey>=f.from)&&(!f.to||r.dateKey<=f.to)&&(!f.week||weekKey(r.dateKey)===f.week)&&(!weeks.length||weeks.includes(weekKey(r.dateKey)))&&(f.weekday==null||f.weekday===''||r.weekday===Number(f.weekday))&&(!weekdays.length||weekdays.includes(r.weekday))&&(!f.mode||r.mode===f.mode)&&(!modes.length||modes.includes(r.mode)));
@@ -248,46 +247,8 @@ export function topProducts(d,f={},kind='drinks'){
   const multiplier=kind==='food'?(food.pieces??1):1,key=kind==='food'?(food.assembly||name):name;
   if(!products.has(key))products.set(key,{name:key,units:0,sales:0,weekday:Array(7).fill(0)});const row=products.get(key);row.units+=r.adjusted*multiplier;row.sales+=r.total;row.weekday[r.weekday]+=r.adjusted*multiplier;
  }
- const query=normalize(f.query),rows=[...products.values()].filter(r=>r.units>0&&(!query||normalize(r.name).includes(query))).sort((a,b)=>b.units-a.units);const units=sum(rows,'units');
+ const rows=[...products.values()].filter(r=>r.units>0).sort((a,b)=>b.units-a.units);const units=sum(rows,'units');
  return {items:rows.map(r=>({...r,share:units?r.units/units:0})),units,sales:sum(rows,'sales'),days:days.length,unmapped,...dateExtent(facts)};
-}
-
-// Same four product groups and aliases used by sbx-mex/Esfuerzo_Operativo.
-// USD means units per reported store-day; it is not a currency. Every summary
-// is a ratio de totales, never an average of weekly averages.
-export const EFFORT_GROUPS=["Cake Pop's",'Galletas','Dona G&G','Pan de Muerto'];
-export function effortProductGroup(name){
- const key=normalize(name);
- if(key.startsWith('cakepop'))return EFFORT_GROUPS[0];
- if(key.startsWith('galleta'))return EFFORT_GROUPS[1];
- if(['donachocolateconnuez','donagg','donasgg'].includes(key))return EFFORT_GROUPS[2];
- if(['panmuerto','pandemuerto','minipanmuerto','minipandemuerto'].some(prefix=>key.startsWith(prefix)))return EFFORT_GROUPS[3];
- return null;
-}
-function effortBucket(d,facts){
- const dates=[...new Set(facts.map(r=>r.dateKey))].sort(),transactions=new Set(facts.map(r=>r.transactionKey)),groups=new Map(EFFORT_GROUPS.map(name=>[name,{name,units:0,products:new Set()}]));
- for(const row of facts){
-  if(row.negative||!(row.adjusted>0))continue;
-  const product=itemName(d,row),group=effortProductGroup(product);if(!group)continue;
-  const target=groups.get(group);target.units+=row.adjusted;target.products.add(product);
- }
- const units=sum([...groups.values()],'units'),days=dates.length,orders=transactions.size,sales=sum(facts,'total');
- return {units,days,dates,orders,sales,usd:days?units/days:null,upt:orders?units/orders*100:null,ticket:orders?sales/orders:null,groups:[...groups.values()].map(group=>({...group,products:[...group.products].sort((a,b)=>a.localeCompare(b,'es')),share:units?group.units/units:0,usd:days?group.units/days:null,upt:orders?group.units/orders*100:null}))};
-}
-export function operationalEffort(d,f={}){
- const facts=filterFacts(d.salesFacts,f),result=effortBucket(d,facts),weeks=new Map();
- for(const row of facts){const key=weekKey(row.dateKey);if(!weeks.has(key))weeks.set(key,[]);weeks.get(key).push(row);}
- const weekly=[...weeks].sort(([a],[b])=>a.localeCompare(b)).map(([week,rows])=>({week,...effortBucket(d,rows)}));
- const weekdays=DAY_LABELS.map((day,weekday)=>{const rows=facts.filter(row=>row.weekday===weekday);return {day,weekday,...effortBucket(d,rows)};}).filter(row=>row.days>0);
- const historyFilter={...f,weeks:[],week:'',from:'',to:''},history=filterFacts(d.salesFacts,historyFilter),selectedDates=[...new Set(facts.map(row=>row.dateKey))].sort();
- const daily=selectedDates.map(date=>{
-  const rows=facts.filter(row=>row.dateKey===date),point=effortBucket(d,rows),weekday=rows[0]?.weekday??dateParts(date)?.weekday;
-  const comparableDates=[...new Set(history.filter(row=>row.weekday===weekday&&row.dateKey<date).map(row=>row.dateKey))].sort().slice(-4),comparable=new Set(comparableDates),baseline=effortBucket(d,history.filter(row=>comparable.has(row.dateKey)));
-  const baselineUpt=comparableDates.length&&baseline.orders?baseline.upt:null,baseUnits=baselineUpt==null||!point.orders?null:Math.ceil(baselineUpt*point.orders/100-0.00001),impactUnits=baseUnits==null?null:Math.max(0,baseUnits-point.units);
-  return {date,day:DAY_LABELS[weekday],...point,baselineUpt,baselineDays:comparableDates.length,baseUnits,impactUnits};
- });
- const current=weekly.at(-1),previous=weekly.at(-2),delta=(a,b)=>a==null||b==null||b===0?null:a/b-1;
- return {...result,weekly,weekdays,daily,current,previous,deltaUsd:delta(current?.usd,previous?.usd),deltaUpt:delta(current?.upt,previous?.upt),...dateExtent(facts)};
 }
 
 export function bakingForecast(d,f={},inputs={},settings={}){
@@ -300,13 +261,22 @@ export function bakingForecast(d,f={},inputs={},settings={}){
  return {items,groups:[...grouped.values()].map(g=>({...g,need:g.missing?null:g.need,trays:g.missing?null:epsCeil(g.need/g.capacity)})),days:days.length,dates:days,date:settings.date,slot:start,weekday:DAY_LABELS[target.weekday],reason:days.length?'':'Sin días comparables anteriores'};
 }
 
+export function auditReasonType(reason){const raw=String(reason||'').trim(),key=normalize(raw);return /^v/i.test(raw)||key==='otros'?'Foco':/^r/i.test(raw)?'Reopen':'Revisar';}
 export function auditStore(d,f={}){
- const tickets=filterFacts(d.auditTickets,f),voids=filterFacts(d.auditVoids,f),payments=filterFacts(d.auditPayments,f),byTicket=new Map();
- for(const r of [...tickets.filter(t=>t.total<0),...voids]){if(!byTicket.has(r.ticketKey))byTicket.set(r.ticketKey,{key:r.ticketKey,ticket:r.ticket,date:r.dateKey,negative:null,voidAmount:0,reasons:new Set(),employees:new Set(),payments:[],unapproved:false});const row=byTicket.get(r.ticketKey);if(r.total<0&&tickets.includes(r))row.negative=r.total;}
- for(const r of voids){const row=byTicket.get(r.ticketKey);row.voidAmount+=Math.abs(Math.min(0,r.total));row.reasons.add(r.reason);if(r.employee)row.employees.add(r.employee);if(!r.manager||['na','0'].includes(normalize(r.manager)))row.unapproved=true;}
- for(const r of payments){const row=byTicket.get(r.ticketKey);if(row)row.payments.push({name:r.payment,amount:r.amount});}
- const rows=[...byTicket.values()].map(r=>({...r,reasons:[...r.reasons],employees:[...r.employees],amount:r.negative!==null?Math.abs(r.negative):r.voidAmount,review:!r.reasons.size?'Sin motivo registrado':r.unapproved?'Sin gerente registrado':r.reasons.has('Otros')?'Revisar motivo Otros':'Validar soporte'})).sort((a,b)=>Number(b.negative!==null)-Number(a.negative!==null)||b.amount-a.amount);
- return {items:rows,negativeCount:rows.filter(r=>r.negative!==null).length,negativeAmount:sum(rows.filter(r=>r.negative!==null),'amount'),voidCount:new Set(voids.map(r=>r.ticketKey)).size,pending:rows.filter(r=>r.unapproved||!r.reasons.length).length,...dateExtent([...tickets,...voids,...payments])};
+ const optionScope={store:f.store,from:f.from,to:f.to},allVoids=[...filterFacts(d.auditVoids,optionScope),...filterFacts(d.auditLegacyRows||[],optionScope)],tickets=filterFacts(d.auditTickets,f),voids=[...filterFacts(d.auditVoids,f),...filterFacts(d.auditLegacyRows||[],f)],payments=filterFacts(d.auditPayments,f),byTicket=new Map(),ticketByKey=new Map(tickets.map(row=>[row.ticketKey,row]));
+ const ensure=r=>{if(!byTicket.has(r.ticketKey))byTicket.set(r.ticketKey,{key:r.ticketKey,ticket:r.ticket,date:r.dateKey,ms:r.ms,minuteOfDay:r.minuteOfDay,negative:null,voidAmount:0,reasons:new Set(),employees:new Set(),people:new Map(),payments:new Map(),products:new Map(),unapproved:false,legacy:false});return byTicket.get(r.ticketKey);};
+ for(const r of voids){const row=ensure(r),employee=d.employeeCatalog.get(`${r.store}|${r.employee}`),partner=r.partner||employee?.name||'',position=r.position||employee?.position||'';row.legacy||=r.legacy;row.ms=Math.min(row.ms,r.ms);row.minuteOfDay=Math.min(row.minuteOfDay,r.minuteOfDay);if(r.legacy)row.voidAmount=Math.max(row.voidAmount,Math.abs(Math.min(0,r.total)));else row.voidAmount+=Math.abs(Math.min(0,r.total));row.reasons.add(r.reason);if(r.employee)row.employees.add(r.employee);if(partner){const person=row.people.get(partner)||{name:partner,position:position||'Puesto no disponible',employee:r.employee||''};if(!person.position&&position)person.position=position;row.people.set(partner,person);}if(r.payment&&!/^sin forma$/i.test(r.payment))row.payments.set(normalize(r.payment),{name:r.payment,amount:r.amount});if(!r.manager||['na','0'].includes(normalize(r.manager)))row.unapproved=true;
+  const productName=r.productName||d.productCatalog.get(r.product)?.name||`Producto ${r.product||'sin nombre'}`,productKey=normalize(productName);if(productKey){const product=row.products.get(productKey)||{name:productName,quantity:r.legacy?null:0,amount:r.legacy?null:0};if(!r.legacy){product.quantity+=Math.abs(r.quantity??1);product.amount+=Math.abs(Math.min(0,r.total));}row.products.set(productKey,product);}
+ }
+ for(const row of byTicket.values()){const ticket=ticketByKey.get(row.key);if(ticket?.total<0)row.negative=ticket.total;}
+ for(const r of payments){const row=byTicket.get(r.ticketKey);if(row&&r.payment)row.payments.set(normalize(r.payment),{name:r.payment,amount:r.amount});}
+ const prepared=[...byTicket.values()].map(row=>{const reasons=[...row.reasons].filter(Boolean),reasonTypes=new Set(reasons.map(auditReasonType)),people=[...row.people.values()],focus=reasonTypes.has('Foco'),reopen=reasonTypes.has('Reopen'),hasNegative=row.negative!==null,amount=Math.max(row.voidAmount,hasNegative?Math.abs(row.negative):0),risk=hasNegative?'Riesgo':focus?'Foco':'Contexto';return {...row,reasons,people,partner:people.map(x=>x.name).join(', ')||'Partner no identificado',position:[...new Set(people.map(x=>x.position).filter(Boolean))].join(', ')||'Puesto no disponible',products:[...row.products.values()].sort((a,b)=>(b.amount||0)-(a.amount||0)||a.name.localeCompare(b.name,'es')),payments:[...row.payments.values()],focus,reopen,hasNegative,risk,amount,review:hasNegative?'Orden negativa vinculada':focus?(reasons.some(x=>normalize(x)==='otros')?'Motivo Otros: validar soporte':'Void: validar contexto'):'Reopen: contexto del cheque'};});
+ const reasonsSelected=new Set((f.reasons||[]).map(String)),partnersSelected=new Set((f.partners||[]).map(String));
+ const rows=prepared.filter(row=>(!reasonsSelected.size||row.reasons.some(reason=>reasonsSelected.has(reason)))&&(!partnersSelected.size||row.people.some(person=>partnersSelected.has(person.name)))).sort((a,b)=>Number(b.hasNegative)-Number(a.hasNegative)||Number(b.focus)-Number(a.focus)||b.amount-a.amount||b.ms-a.ms);
+ const employeeGroups=new Map();for(const row of rows){for(const person of row.people){const key=person.name+'|'+person.position,current=employeeGroups.get(key)||{partner:person.name,position:person.position,tickets:0,focus:0,reopen:0,negative:0,amount:0};current.tickets++;current.focus+=Number(row.focus);current.reopen+=Number(row.reopen);current.negative+=Number(row.hasNegative);current.amount+=row.amount;employeeGroups.set(key,current);}}
+ const employees=[...employeeGroups.values()].sort((a,b)=>b.focus-a.focus||b.negative-a.negative||b.amount-a.amount),hourGroups=new Map();for(const row of rows){const hour=Math.floor(row.minuteOfDay/60),current=hourGroups.get(hour)||{hour,tickets:0,focus:0,amount:0};current.tickets++;current.focus+=Number(row.focus);current.amount+=row.amount;hourGroups.set(hour,current);}const hours=[...hourGroups.values()].sort((a,b)=>b.focus-a.focus||b.tickets-a.tickets||b.amount-a.amount);
+ const optionPartner=row=>row.partner||d.employeeCatalog.get(`${row.store}|${row.employee}`)?.name||'';
+ return {items:rows,voidCount:rows.length,focusCount:rows.filter(row=>row.focus).length,reopenCount:rows.filter(row=>row.reopen).length,negativeCount:rows.filter(row=>row.hasNegative).length,negativeAmount:sum(rows.filter(row=>row.hasNegative),row=>Math.abs(row.negative)),totalAmount:sum(rows,'amount'),pending:rows.filter(row=>row.partner==='Partner no identificado'||row.reasons.length===0).length,employees,hours,topPartner:employees[0]||null,peakHour:hours[0]||null,filterOptions:{reasons:[...new Set(allVoids.map(row=>row.reason).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es')),partners:[...new Set(allVoids.map(optionPartner).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es')),weeks:[...new Set(allVoids.map(row=>weekKey(row.dateKey)))].sort(),weekdays:[...new Set(allVoids.map(row=>row.weekday))].sort()},...dateExtent(voids)};
 }
 
 export function reportFor(module,result,context={}){
@@ -348,14 +318,12 @@ export function reportFor(module,result,context={}){
   if(r.excluded.length)sheet('Sin consumo de vaso',['Producto','Subcategoría','Cantidad','Motivo'],r.excluded.map(x=>[x.name,x.family,x.quantity,x.reason]));
  }
  if(module==='top'){report.summary=[['Unidades netas',r.units],['Venta',r.sales]];sheet(context.subtab||'Ranking',['Producto','Unidades','Participación',...DAY_LABELS,'Venta'],r.items.map(x=>[x.name,x.units,x.share,...x.weekday,x.sales]));}
- if(module==='effort'){
-  report.summary=[['USD · unidades por día',r.usd],['UPT · unidades por 100 transacciones',r.upt],['Unidades de impulso',r.units],['Transacciones',r.orders]];
-  sheet('Grupos de impulso',['Grupo','Unidades','USD','UPT','Participación','Productos detectados'],r.groups.map(x=>[x.name,x.units,x.usd,x.upt,x.share,x.products.join(', ')]));
-  sheet('UPT por día',['Fecha','Día','Unidades','Transacciones','UPT real','Base propia UPT','Días base','Unidades base','Impacto en unidades'],r.daily.map(x=>[x.date,x.day,x.units,x.orders,x.upt,x.baselineUpt,x.baselineDays,x.baseUnits,x.impactUnits]));
-  sheet('Lectura semanal',['Semana','Días operativos','Unidades','USD','Transacciones','UPT'],r.weekly.map(x=>[x.week,x.days,x.units,x.usd,x.orders,x.upt]));
-  sheet('Días comparables',['Día','Días observados','Unidades','USD','Transacciones','UPT'],r.weekdays.map(x=>[x.day,x.days,x.units,x.usd,x.orders,x.upt]));
- }
  if(module==='baking'){report.period=shortDate(r.date);report.summary=[['Día comparable',r.weekday],['Días de referencia',r.days],['Desde',clock(r.slot)],['Referencia',r.dates?.map(shortDate).join(', ')||'Sin historial']];sheet('Previsión',['Producto','Previsto restante','Ya horneado','Por hornear','Capacidad por charola','Horneo','Temperatura'],r.items.map(x=>[x.product,x.forecast,x.stock,x.need,x.maxTray,x.bake,x.temperature]));sheet('Tandas',['Grupo','Productos','Piezas','Charolas combinadas'],r.groups.map(x=>[x.name,x.products.join(', '),x.need,x.trays]));}
- if(module==='audit'){report.summary=[['Órdenes negativas',r.negativeCount],['Importe negativo',r.negativeAmount],['Tickets con void',r.voidCount],['Sin soporte completo',r.pending]];sheet('Revisión',['Fecha','Ticket','Importe a revisar','Motivo','Pago asociado','Revisión'],r.items.map(x=>[x.date,x.ticket,x.amount,x.reasons.join(', '),x.payments.map(p=>p.name).join(', '),x.review]));}
+ if(module==='audit'){
+  report.summary=[['Tickets Void',r.voidCount],['Foco auditor',r.focusCount],['Reopen',r.reopenCount],['Órdenes negativas vinculadas',r.negativeCount],['Importe anulado',r.totalAmount]];
+  sheet('Tickets Void',['Fecha cierre','Hora','Ticket','Partner','Puesto','Prioridad','Motivo','Importe','Orden negativa','Pago'],r.items.map(x=>[x.date,new Date(x.ms).toISOString().slice(11,19),x.ticket,x.partner,x.position,x.risk,x.reasons.join(', '),x.amount,x.hasNegative?'Sí':'No',x.payments.map(p=>p.name).join(', ')]));
+  sheet('Detalle Ticket',['Fecha cierre','Hora','Ticket','Partner','Puesto','Producto','Cantidad','Importe línea','Motivo'],r.items.flatMap(x=>x.products.map(product=>[x.date,new Date(x.ms).toISOString().slice(11,19),x.ticket,x.partner,x.position,product.name,product.quantity,product.amount,x.reasons.join(', ')])));
+  sheet('Foco por partner',['Partner','Puesto','Tickets','Foco','Reopen','Órdenes negativas','Importe'],r.employees.map(x=>[x.partner,x.position,x.tickets,x.focus,x.reopen,x.negative,x.amount]));
+ }
  return report;
 }

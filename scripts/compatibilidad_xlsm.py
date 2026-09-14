@@ -26,8 +26,10 @@ STRUCTURES = {
     "auditoria_ticket": ("IDTienda", "Ticket", "Fecha", "Estatus", "Total", "FechaNegocio"),
     "auditoria_void": ("IDTienda", "FechaHora", "Ticket", "IDProducto", "IdVoid", "VoidReason", "Total"),
     "auditoria_pago": ("IDTienda", "FechaHora", "Ticket", "IdFormaPago", "FormaPagDesc", "MontoTotal", "Total"),
+    "auditoria_legacy": ("IDTienda", "Ticket", "FechaCierre", "IDEmpleado", "Total", "Partner", "Puesto_asignado", "Forma de Pago", "Reason", "Producto"),
     "productos": ("IDProducto", "Descripcion"),
     "tienda": ("IDTienda", "Tienda"),
+    "empleados": ("IDTienda", "IDEmpleado", "Nombre", "Puesto"),
     "presentaciones": ("IDArticulo", "NombreArticuloStock", "PickPack", "UnidadStock"),
     "lista_sap": ("ID WOE", "Codigo DIA", "Descripcion SAP"),
     "catalogo_micros": ("Familia", "Nombre Micros", "Codigo DIA", "Proveedor"),
@@ -165,7 +167,7 @@ def excel_date(value: str) -> str | None:
 
 
 def date_stats(zf: zipfile.ZipFile, sheet_path: str, source: Source, shared_strings: list[str]) -> tuple[str | None, int]:
-    date_header = next((header for header in ("FechaHora", "Fecha") if header in source.columns), None)
+    date_header = next((header for header in ("FechaHora", "FechaCierre", "Fecha") if header in source.columns), None)
     if not date_header or sheet_path not in zf.namelist():
         return None, 0
     start_ref, end_ref = source.reference.split(":") if ":" in source.reference else (source.reference, source.reference)
@@ -196,7 +198,7 @@ def motor_kind(result: Result) -> str:
         groups.append("venta")
     if "uso" in kinds:
         groups.append("uso")
-    if kinds & {"auditoria_ticket", "auditoria_void", "auditoria_pago"}:
+    if kinds & {"auditoria_ticket", "auditoria_void", "auditoria_pago", "auditoria_legacy"}:
         groups.append("auditoria")
     if not groups and kinds & {"lista_sap", "catalogo_micros"}:
         groups.append("lista_precios")
@@ -272,7 +274,8 @@ def inspect_workbook(path: Path) -> Result:
                     roles = [
                         kind for kind in kinds
                         if (kind in {"venta", "uso", "auditoria_ticket", "auditoria_void", "auditoria_pago"} and is_ac_source(sheet_name))
-                        or kind in {"productos", "tienda", "presentaciones", "lista_sap", "catalogo_micros", "compostable", "woe", "horneo", "alimentos", "vasos", "crema", "politica_tienda"}
+                        or (kind == "auditoria_legacy" and normalize(sheet_name) == "basevoid")
+                        or kind in {"productos", "tienda", "empleados", "presentaciones", "lista_sap", "catalogo_micros", "compostable", "woe", "horneo", "alimentos", "vasos", "crema", "politica_tienda"}
                     ]
                     source = Source(sheet_name, table_name, reference, table_row_count(reference), columns, roles)
                     candidates.append((source, match_structure(columns)[1]))
@@ -281,7 +284,7 @@ def inspect_workbook(path: Path) -> Result:
             parameter_roles = {"woe", "lista_sap", "catalogo_micros", "horneo", "compostable", "alimentos", "vasos", "crema", "politica_tienda"}
             allowed = parameter_roles if suffix == ".xlsx" else set(STRUCTURES)
             selected = [source for source in selected if any(role in allowed for role in source.roles)]
-            useful = any(role in (parameter_roles if suffix == ".xlsx" else {"venta", "uso", "auditoria_ticket", "auditoria_void", "auditoria_pago"}) for source in selected for role in source.roles)
+            useful = any(role in (parameter_roles if suffix == ".xlsx" else {"venta", "uso", "auditoria_ticket", "auditoria_void", "auditoria_pago", "auditoria_legacy"}) for source in selected for role in source.roles)
             if selected and useful:
                 shared_strings: list[str] = []
                 if "xl/sharedStrings.xml" in names:
@@ -317,7 +320,7 @@ def find_files(paths: Iterable[Path], folders: Iterable[Path]) -> list[Path]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Prueba compatibilidad XLSM por estructura; lee solo fuentes _ac.")
+    parser = argparse.ArgumentParser(description="Prueba compatibilidad XLSM por estructura; acepta fuentes _ac y Base_Void de Auditoria_Tienda.")
     parser.add_argument("archivos", nargs="*", type=Path)
     parser.add_argument("--fuentes", action="append", default=[], type=Path, help="Carpeta con uno o más XLSM")
     args = parser.parse_args()

@@ -70,14 +70,8 @@ class SitioPublicoTests(unittest.TestCase):
         for obsolete in ("metric('Uso del periodo'", "metric('Promedio diario'", "metric('Conversión'"):
             self.assertNotIn(obsolete, trend)
     def test_separate_module_flows(self):
-        for name in ("maxminView", "trendView", "orderView", "peakView", "normalView", "bakingView", "topView", "effortView", "auditView", "aboutView"):
+        for name in ("maxminView", "trendView", "orderView", "peakView", "normalView", "bakingView", "topView", "auditView", "aboutView"):
             self.assertIn("function " + name, self.ui)
-    def test_top_and_effort_are_visual_and_use_multi_filters(self):
-        for token in ("function topFilters", "multiFilter('weeks','Semanas'", "multiFilter('weekdays','Días'", "multiFilter('modes','Canales'", "Ranking con lectura visual", "Esfuerzo Operativo", "Unidades de impulso ÷ días operativos", "UPT por día vencido", "Base propia", "operationalEffort"):
-            self.assertIn(token, self.ui)
-        operations = (ROOT / "assets" / "operations.mjs").read_text()
-        for token in ("EFFORT_GROUPS", "effortProductGroup", "units/days", "units/orders*100", "ratio de totales"):
-            self.assertIn(token, operations)
     def test_normalizados_has_four_views_and_global_multi_filters(self):
         self.assertIn("tabs('normal',['Resumen','Vasos y tapas','FHW','Crema batida'])", self.ui)
         self.assertIn("multiFilter('weeks','Semanas'", self.ui)
@@ -85,6 +79,12 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertIn("multiFilter('modes','Canales'", self.ui)
         self.assertNotIn("metric('Devoluciones'", self.ui)
         self.assertNotIn("metric('Bebidas en vaso'", self.ui)
+    def test_auditoria_is_one_void_flow_with_multi_filters_and_ticket_detail(self):
+        audit = self.ui.split("function auditView(){", 1)[1].split("function aboutView(){", 1)[0]
+        self.assertNotIn("tabs('audit'", audit)
+        self.assertNotIn("Negativas", audit)
+        for token in ("multiFilter('reasons','Motivos'", "multiFilter('partners','Partners'", "data-audit-ticket=", "DESGLOSE DEL TICKET", "Concentración por partner"):
+            self.assertIn(token, self.ui)
     def test_no_diagnostics_or_demo(self):
         for token in ("Exportar diagnóstico", "demoButton", "archivo_patron"):
             self.assertNotIn(token, self.html + self.ui)

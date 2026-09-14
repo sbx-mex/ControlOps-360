@@ -168,6 +168,7 @@ async function tableCandidates(zip, sheets, strings) {
       const headers = [...xml.getElementsByTagName("tableColumn")].map((node) => node.getAttribute("name") || "");
       const types = structuralTypes(headers);
       const roles = types.filter((type) => {
+        if (type==="auditLegacy") return normalize(sheet.name)==="basevoid";
         if (["sales", "usage", "auditTicket", "auditVoid", "auditPayment"].includes(type)) return isAcSource(sheet.name);
         return Object.hasOwn(CATALOG_FIELDS, type);
       });
@@ -228,7 +229,7 @@ export async function inspectWorkbook(file, progress=()=>{}) {
  const [sheets,strings,fingerprint]=await Promise.all([workbookSheets(zip),sharedStrings(zip),fingerprintPromise]);
  const candidates=await tableCandidates(zip,sheets,strings);
  const allowed=macro?[...FACT_TYPES,...Object.keys(CATALOG_FIELDS)]:["woe","sapList","microsList","baking","storePolicy","compostable","food","drink","cream"];
- if(!candidates.some(c=>c.roles.some(r=>macro?FACT_TYPES.includes(r):allowed.includes(r))))throw new Error(parameter ? "El XLSX no es un parámetro compatible." : "No contiene tablas _ac compatibles.");
+ if(!candidates.some(c=>c.roles.some(r=>macro?FACT_TYPES.includes(r):allowed.includes(r))))throw new Error(parameter ? "El XLSX no es un parámetro compatible." : "No contiene tablas operativas compatibles.");
  const local=createDataset(),sources=[];
  for(const candidate of candidates){
   const roles=candidate.roles.filter(r=>allowed.includes(r));

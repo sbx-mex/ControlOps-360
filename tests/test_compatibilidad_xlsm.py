@@ -101,6 +101,16 @@ class CompatibilityTests(unittest.TestCase):
             make_xlsm(path, [("detalleventa_base", "detalleventa_ac", list(MOD.REQUIRED_HEADERS))])
             self.assertFalse(MOD.inspect_xlsm(path).compatible)
 
+    def test_auditoria_tienda_legacy_accepts_only_base_void(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "Auditoria_Tienda.xlsm"
+            headers = list(MOD.STRUCTURES["auditoria_legacy"])
+            make_xlsm(path, [("Base_Void", "Base_Void", headers), ("Historico_Void", "Historico_Void", headers)])
+            result = MOD.inspect_xlsm(path)
+            self.assertTrue(result.compatible)
+            self.assertIn("auditoria_legacy", result.kinds)
+            self.assertEqual([source.sheet for source in result.sources], ["Base_Void"])
+
     def test_macro_container_is_required(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "archivo.xlsm"
