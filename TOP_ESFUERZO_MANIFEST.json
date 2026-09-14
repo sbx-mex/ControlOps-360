@@ -1,0 +1,20 @@
+{
+  "version": "5.5.0",
+  "scope": "Top Bebidas & Alimentos + Esfuerzo Operativo",
+  "reference": "sbx-mex/Esfuerzo_Operativo",
+  "upt_source": "transacciones reales por día disponible",
+  "store_baseline": "hasta cuatro días anteriores del mismo día de semana",
+  "replace": [
+    "assets/operations.mjs",
+    "assets/ui.mjs",
+    "assets/styles.css",
+    "index.html",
+    "VERSION",
+    "README.md"
+  ],
+  "validation": [
+    "tests/engine.test.mjs",
+    "tests/test_site_publico.py"
+  ],
+  "data_included": false
+}

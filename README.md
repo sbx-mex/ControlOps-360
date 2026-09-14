@@ -1,12 +1,20 @@
 # Control Ops 360°
 
-Multiherramienta local de tienda. Uno o varios XLSM activan sólo sus módulos. CeCo fijo, cruces tbl, tarjetas Max & Min, tendencia, Pedido WOE, ensamble por media hora, normalizados, horneo, ranking y auditoría. Excel y PDF pertenecen al menú activo.
+Multiherramienta local de tienda. Uno o varios XLSM activan sólo sus módulos. CeCo fijo, cruces tbl, tarjetas Max & Min, tendencia, Pedido WOE, 48 medias horas, normalizados, horneo, ranking, Esfuerzo Operativo y auditoría. Excel y PDF pertenecen al menú activo.
 
 ## Actualización V5
 
 Reemplaza los archivos conservando las carpetas del ZIP. No incluye XLSM, ventas ni inventarios de tienda. Las cinco tbl se integran como parámetros versionados en `assets/parameters.mjs`; pueden actualizarse cargando sus XLSX originales por estructura.
 
 La lógica y las limitaciones están en **Acerca de**. Tapas automáticas, historial entre sesiones, venta por empleado y descuentos completos quedan para la siguiente versión. Code Brew y Lay Out siguen siendo proyectos externos.
+
+### Top & Esfuerzo Operativo V5.5
+
+`Top Bebidas & Alimentos` permite seleccionar varias semanas, días y canales a la vez. La pantalla confirma el universo activo, concentra los indicadores clave y agrega barras de participación para que el ranking pueda leerse sin recorrer primero toda la tabla. La búsqueda por producto recalcula unidades, mezcla y venta sobre los resultados visibles.
+
+`Esfuerzo Operativo` es un módulo independiente basado en la metodología de `sbx-mex/Esfuerzo_Operativo`. Agrupa Cake Pop's, Galletas, Dona G&G y Pan de Muerto. `USD` significa unidades de impulso por día operativo y `UPT` significa unidades por cada 100 transacciones. Los dos indicadores se calculan como razón de totales y utilizan exactamente las mismas semanas, días y canales elegidos.
+
+UPT se abre por día vencido con las transacciones reales del motor. Para cada fecha se construye una base propia con hasta cuatro fechas anteriores del mismo día de semana. El impacto indica las unidades adicionales que habrían permitido alcanzar ese ritmo histórico de la propia tienda; no se impone una meta genérica. Excel y PDF exportan esta lectura activa, su detalle diario y la reconciliación semanal.
 
 ### Pedido WOE V5.4
 
@@ -16,20 +24,11 @@ Los PDF SAP de pedidos en tránsito se leen localmente en el navegador. Cada rem
 
 Las exportaciones de Excel y PDF están orientadas a operación: incluyen identificación SAP/DIA, descripción, existencia, tránsito por remisión, cantidad final y los cruces que requieren revisión. Ningún archivo operativo se envía fuera del navegador.
 
-### Ensamble V5.5
-
-`Ensamble` usa las 12 filas validadas de la tbl con `Ensamble = Si` y las consolida en 6 nombres unificados. La columna `Ingrediente ensamble` quedó agregada al parámetro embebido con contenido en las 12 filas aplicables. Los filtros de semana y día aceptan selección múltiple. El motor promedia los días realmente observados en cada intervalo de 30 minutos, separa devoluciones y redondea hacia arriba únicamente para formar el plan operativo.
-
-La pantalla guía al usuario en tres pasos, muestra el promedio exacto debajo de cada cantidad sugerida y destaca la franja de mayor carga. La guía de ingredientes convierte el plan del día en rebanadas y gramos; `Panini Pavo` permanece identificado como producto empaquetado.
-
-Excel entrega `Plan media hora`, `Ingredientes` y `Trazabilidad`. El PDF genera una tabla operativa por franja y una segunda sección visual de recetas. Los filtros y los cálculos permanecen limitados a esta pestaña.
-
 ## Pruebas
 
 ```bash
 python -m unittest discover -s tests -v
 node --test tests/*.test.mjs
-python scripts/auditar_ensamble.py
 python scripts/auditar_pedido_woe.py
 python scripts/compatibilidad_xlsm.py motor.xlsm parametro.xlsx
 ```
