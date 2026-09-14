@@ -10,7 +10,7 @@ import re
 import sys
 import unicodedata
 import zipfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
@@ -111,8 +111,10 @@ class Source:
     rows: int
     columns: list[str]
     roles: list[str]
+    earliest_date: str | None = None
     latest_date: str | None = None
     observed_days: int = 0
+    cecos: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -122,6 +124,7 @@ class Result:
     macro_enabled: bool
     sources: list[Source]
     kinds: list[str]
+    cecos: list[str] = field(default_factory=list)
     reason: str | None = None
 
 
@@ -166,15 +169,18 @@ def excel_date(value: str) -> str | None:
     return None
 
 
-def date_stats(zf: zipfile.ZipFile, sheet_path: str, source: Source, shared_strings: list[str]) -> tuple[str | None, int]:
+def source_stats(zf: zipfile.ZipFile, sheet_path: str, source: Source, shared_strings: list[str]) -> tuple[str | None, str | None, int, list[str]]:
     date_header = next((header for header in ("FechaHora", "FechaCierre", "Fecha") if header in source.columns), None)
-    if not date_header or sheet_path not in zf.namelist():
-        return None, 0
+    store_header = next((header for header in ("IDTienda", "CeCo", "CC") if header in source.columns), None)
+    if (not date_header and not store_header) or sheet_path not in zf.namelist():
+        return None, None, 0, []
     start_ref, end_ref = source.reference.split(":") if ":" in source.reference else (source.reference, source.reference)
     start_row = int(re.search(r"\d+", start_ref).group())
     end_row = int(re.search(r"\d+", end_ref).group())
-    target_column = column_index(start_ref) + source.columns.index(date_header)
+    date_column = column_index(start_ref) + source.columns.index(date_header) if date_header else None
+    store_column = column_index(start_ref) + source.columns.index(store_header) if store_header else None
     dates: set[str] = set()
+    cecos: set[str] = set()
     with zf.open(sheet_path) as stream:
         for _, node in ET.iterparse(stream, events=("end",)):
             if node.tag != f"{{{NS_MAIN}}}row":
@@ -182,13 +188,18 @@ def date_stats(zf: zipfile.ZipFile, sheet_path: str, source: Source, shared_stri
             row_number = int(node.attrib.get("r", "0") or 0)
             if start_row < row_number <= end_row:
                 for cell in node.findall(f"{{{NS_MAIN}}}c"):
-                    if column_index(cell.attrib.get("r", "A1")) == target_column:
-                        value = excel_date(cell_text(cell, shared_strings))
+                    cell_column = column_index(cell.attrib.get("r", "A1"))
+                    raw = cell_text(cell, shared_strings)
+                    if cell_column == date_column:
+                        value = excel_date(raw)
                         if value:
                             dates.add(value)
-                        break
+                    if cell_column == store_column:
+                        value = re.sub(r"\.0+$", "", str(raw).strip())
+                        if value:
+                            cecos.add(value)
             node.clear()
-    return (max(dates), len(dates)) if dates else (None, 0)
+    return (min(dates), max(dates), len(dates), sorted(cecos)) if dates else (None, None, 0, sorted(cecos))
 
 
 def motor_kind(result: Result) -> str:
@@ -215,36 +226,51 @@ def freshness_key(path: Path, result: Result) -> tuple[str, int, int, int, int]:
     return latest, coverage, name_timestamp, modified, rows
 
 
+def period_key(result: Result) -> str:
+    starts = [source.earliest_date for source in result.sources if source.earliest_date]
+    ends = [source.latest_date for source in result.sources if source.latest_date]
+    return f"{min(starts)}|{max(ends)}" if starts and ends else "sin-periodo"
+
+
+def selection_key(result: Result) -> str:
+    kind = motor_kind(result)
+    if kind:
+        ceco = result.cecos[0] if len(result.cecos) == 1 else "SIN-CECO"
+        return f"{ceco}|{kind}|{period_key(result)}"
+    references = "+".join(sorted(result.kinds)) or "sin-tipo"
+    return f"PARAMETRO|{references}|{period_key(result)}"
+
+
 def select_most_recent(items: Iterable[tuple[Path, Result]]) -> tuple[list[Path], list[Path]]:
-    selected_parameters: list[Path] = []
     winners: dict[str, tuple[Path, Result]] = {}
     superseded: list[Path] = []
     for path, result in items:
-        kind = motor_kind(result)
-        if not kind:
-            selected_parameters.append(path)
-            continue
-        current = winners.get(kind)
+        identity = selection_key(result)
+        current = winners.get(identity)
         if current is None or freshness_key(path, result) > freshness_key(*current):
             if current is not None:
                 superseded.append(current[0])
-            winners[kind] = (path, result)
+            winners[identity] = (path, result)
         else:
             superseded.append(path)
-    return selected_parameters + [item[0] for item in winners.values()], superseded
+    selected = sorted(
+        winners.values(),
+        key=lambda item: (bool(motor_kind(item[1])), period_key(item[1]), selection_key(item[1]), freshness_key(*item)),
+    )
+    return [item[0] for item in selected], superseded
 
 
 def inspect_workbook(path: Path) -> Result:
     suffix = path.suffix.casefold()
     if suffix not in {".xlsm", ".xlsx"}:
-        return Result(path.name, False, False, [], [], "Solo se aceptan XLSM o parámetros XLSX")
+        return Result(path.name, False, False, [], [], reason="Solo se aceptan XLSM o parámetros XLSX")
     try:
         with zipfile.ZipFile(path) as zf:
             names = set(zf.namelist())
             macro_enabled = "xl/vbaProject.bin" in names
             required_parts = {"xl/workbook.xml", "xl/_rels/workbook.xml.rels"}
             if not required_parts.issubset(names) or (suffix == ".xlsm" and not macro_enabled):
-                return Result(path.name, False, macro_enabled, [], [], "Contenedor Excel incompleto")
+                return Result(path.name, False, macro_enabled, [], [], reason="Contenedor Excel incompleto")
 
             workbook = ET.fromstring(zf.read("xl/workbook.xml"))
             workbook_rels = relationships(zf, "xl/_rels/workbook.xml.rels")
@@ -291,22 +317,35 @@ def inspect_workbook(path: Path) -> Result:
                     shared_root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
                     shared_strings = ["".join(node.text or "" for node in item.findall(f".//{{{NS_MAIN}}}t")) for item in shared_root.findall(f"{{{NS_MAIN}}}si")]
                 sheet_paths = dict(sheets)
-                selected = [Source(source.sheet, source.table, source.reference, source.rows, source.columns, source.roles, *date_stats(zf, sheet_paths.get(source.sheet, ""), source, shared_strings)) for source in selected]
+                enriched: list[Source] = []
+                for source in selected:
+                    earliest, latest, observed, cecos = source_stats(zf, sheet_paths.get(source.sheet, ""), source, shared_strings)
+                    enriched.append(Source(source.sheet, source.table, source.reference, source.rows, source.columns, source.roles, earliest, latest, observed, cecos))
+                selected = enriched
                 kinds = sorted({role for source in selected for role in source.roles})
-                return Result(path.name, True, macro_enabled, selected, kinds)
+                fact_roles = {"venta", "uso", "auditoria_ticket", "auditoria_void", "auditoria_pago", "auditoria_legacy"}
+                operational = [source for source in selected if fact_roles.intersection(source.roles)]
+                cecos = sorted({ceco for source in operational for ceco in source.cecos})
+                if operational and len(cecos) != 1:
+                    reason = "No se identificó un CeCo confiable" if not cecos else "El Motor contiene más de un CeCo"
+                    return Result(path.name, False, macro_enabled, selected, kinds, cecos, reason)
+                store_cecos = {ceco for source in selected if "tienda" in source.roles for ceco in source.cecos}
+                if cecos and store_cecos and cecos[0] not in store_cecos:
+                    return Result(path.name, False, macro_enabled, selected, kinds, cecos, "El CeCo operativo no coincide con Tienda")
+                return Result(path.name, True, macro_enabled, selected, kinds, cecos)
 
             best_missing = min((missing for _, missing in candidates), key=len, default=list(REQUIRED_HEADERS))
             reason = "No se encontró una tabla compatible"
             if best_missing:
                 reason += f". Faltan: {', '.join(best_missing)}"
-            return Result(path.name, False, True, [], [], reason)
+            return Result(path.name, False, True, [], [], reason=reason)
     except (OSError, zipfile.BadZipFile, ET.ParseError, KeyError) as error:
-        return Result(path.name, False, False, [], [], f"No se pudo leer: {type(error).__name__}")
+        return Result(path.name, False, False, [], [], reason=f"No se pudo leer: {type(error).__name__}")
 
 
 def inspect_xlsm(path: Path) -> Result:
     if path.suffix.casefold() != ".xlsm":
-        return Result(path.name, False, False, [], [], "Solo se aceptan archivos .xlsm")
+        return Result(path.name, False, False, [], [], reason="Solo se aceptan archivos .xlsm")
     return inspect_workbook(path)
 
 
@@ -329,13 +368,32 @@ def main() -> int:
         parser.error("Indica al menos un archivo .xlsm o una carpeta --fuentes")
 
     results = [inspect_workbook(path) for path in files]
-    selected, superseded = select_most_recent((path, result) for path, result in zip(files, results) if result.compatible)
+    compatible_items = [(path, result) for path, result in zip(files, results) if result.compatible]
+    selected, superseded = select_most_recent(compatible_items)
+    session_cecos = sorted({ceco for _, result in compatible_items for ceco in result.cecos})
+    session_consistent = len(session_cecos) <= 1
+    selected_names = {path.name for path in selected}
+    superseded_names = {path.name for path in superseded}
+    decisions = []
+    for path, result in zip(files, results):
+        status = "bloqueado"
+        reason = result.reason or "Estructura o CeCo inválido"
+        if result.compatible and not session_consistent and result.cecos:
+            reason = "La sesión contiene Motores de CeCo diferentes"
+        elif result.compatible and path.name in superseded_names:
+            status, reason = "omitido", "Existe una versión más reciente del mismo CeCo, tipo y periodo"
+        elif result.compatible and path.name in selected_names:
+            status, reason = "seleccionado", "Fuente vigente"
+        decisions.append({"file": path.name, "ceco": result.cecos[0] if len(result.cecos) == 1 else None, "type": motor_kind(result) or "+".join(result.kinds), "period": period_key(result), "status": status, "reason": reason})
     payload = {
-        "compatible": all(result.compatible for result in results),
+        "compatible": all(result.compatible for result in results) and session_consistent,
         "files": len(results),
         "compatible_files": sum(result.compatible for result in results),
-        "selected_files": [path.name for path in selected],
+        "cecos_detected": session_cecos,
+        "session_ceco_consistent": session_consistent,
+        "selected_files": [path.name for path in selected] if session_consistent else [],
         "superseded_files": [path.name for path in superseded],
+        "selection": decisions,
         "results": [asdict(result) for result in results],
     }
     print(json.dumps(payload, ensure_ascii=False, indent=2))
