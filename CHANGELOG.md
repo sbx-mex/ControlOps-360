@@ -1,5 +1,13 @@
 # Historial consolidado
 
+## 6.2.1 · Filtros rápidos y puerta verde
+
+- Cierra cada filtro múltiple al seleccionar para que el resultado quede visible de inmediato.
+- Añade búsqueda en listas largas, apertura exclusiva, cierre exterior y tecla Escape.
+- Sincroniza pruebas, auditor, versión y documentación con la interfaz mínima para recuperar la puerta verde.
+- Evita que un ID de empleado reutilizado bloquee Motor_01; el ticket queda sin atribución automática.
+- Mantiene sólo las herramientas disponibles y la carga principal identificada en verde.
+
 ## 6.1.0 · Gestión 360° trazable
 
 - Añade Resumen 360°, Finanzas, Alcance y calidad, y Fuentes cargadas sin duplicar las pantallas operativas.

@@ -4,7 +4,7 @@ import {MODULES,availableModules,inventory,minmaxValues,sleeveFor,packSizeFor,re
 const $=id=>document.getElementById(id),n=v=>v==null?'—':new Intl.NumberFormat('es-MX',{maximumFractionDigits:1}).format(v),n2=v=>v==null?'—':new Intl.NumberFormat('es-MX',{maximumFractionDigits:2}).format(v),pct=v=>v==null?'—':`${new Intl.NumberFormat('es-MX',{minimumFractionDigits:1,maximumFractionDigits:1}).format(v*100)}%`,money=v=>new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',maximumFractionDigits:0}).format(v||0);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const saved=()=>{try{const v=JSON.parse(localStorage.getItem('controlops-v5-settings')||'{}');return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}catch{return {};}};
-const state={dataset:createDataset(),module:'menu',filters:{},subtabs:{normal:'Resumen',top:'Bebidas',effort:'USD'},files:[],workbooks:[],sequence:0,sourceSequence:0,loading:false,loadingTransit:false,exporting:false,page:0,settings:saved(),result:null,report:null,orderResults:[],transitAudit:null,maxminSelected:new Set(),openMulti:'',auditTicket:'',lastLoad:null};
+const state={dataset:createDataset(),module:'menu',filters:{},subtabs:{normal:'Resumen',top:'Bebidas',effort:'USD'},files:[],workbooks:[],sequence:0,sourceSequence:0,loading:false,loadingTransit:false,exporting:false,page:0,settings:saved(),result:null,report:null,orderResults:[],transitAudit:null,maxminSelected:new Set(),auditTicket:'',lastLoad:null};
 for(const name of ['minimum','modes','orders','baked','orderSettings','transitOrders','lids'])state.settings[name]||={};
 let parameterPromise,readerPromise,exportPromise,transitPromise;
 const loadParameters=()=>parameterPromise||=(import('./parameters.mjs'));
@@ -29,7 +29,8 @@ function numeric(value,attributes,placeholder=''){return `<input type="number" m
 function dailyInput(value,attributes){return `<input type="number" min="0" step="0.1" inputmode="decimal" ${attributes} value="${Number(value).toFixed(1)}">`;}
 function multiFilter(name,label,values,selected=[]){
  const chosen=new Set(selected.map(String)),labels=new Map(values.map(([value,text])=>[String(value),text])),only=[...chosen][0],summary=!chosen.size?'Todas':chosen.size===1?(labels.get(only)||'1 seleccionada'):`${chosen.size} seleccionadas`;
- return `<div class="field multi-field"><span>${esc(label)}</span><details class="multi-select"${state.openMulti===name?' open':''}><summary>${esc(summary)}</summary><div class="multi-menu"><button type="button" data-clear-multi="${esc(name)}">Todas</button>${values.map(([value,text])=>`<label><input type="checkbox" data-multi-filter="${esc(name)}" value="${esc(value)}"${chosen.has(String(value))?' checked':''}><span>${esc(text)}</span></label>`).join('')}</div></details></div>`;
+ const search=values.length>7?`<input class="multi-search" type="search" data-multi-search="${esc(name)}" aria-label="Buscar en ${esc(label)}" placeholder="Buscar…" autocomplete="off">`:'';
+ return `<div class="field multi-field"><span>${esc(label)}</span><details class="multi-select" name="controlops-filters"><summary><span>${esc(summary)}</span><small>${chosen.size?'Cambiar':'Elegir'}</small></summary><div class="multi-menu">${search}<div class="multi-actions"><button type="button" data-clear-multi="${esc(name)}">Quitar filtro</button><span>${values.length} opciones</span></div><div class="multi-options">${values.map(([value,text])=>`<label data-multi-option><input type="checkbox" data-multi-filter="${esc(name)}" value="${esc(value)}"${chosen.has(String(value))?' checked':''}><span>${esc(text)}</span></label>`).join('')}</div><p class="multi-no-results">Sin coincidencias</p></div></details></div>`;
 }
 function tabs(name,values){return `<div class="subtabs" role="tablist" aria-label="${name}">${values.map(v=>`<button role="tab" aria-selected="${state.subtabs[name]===v}" data-subtab="${esc(v)}" class="${state.subtabs[name]===v?'active':''}">${esc(v)}</button>`).join('')}</div>`;}
 function filterState(){return state.filters[state.module]||=(state.module==='order'?{window:'21'}:{});}
@@ -254,12 +255,17 @@ $('homeButton').addEventListener('click',()=>navigate('menu'));$('backButton').a
 $('confirmButton').addEventListener('click',()=>$('confirmation').close());
 $('resetButton').addEventListener('click',()=>{if(confirm('¿Cambiar tienda? Se retirarán los datos cargados de esta sesión.')){state.dataset=createDataset();state.files=[];state.workbooks=[];state.sequence=0;state.sourceSequence=0;state.lastLoad=null;state.filters={};state.maxminSelected.clear();state.module='menu';draw();}});
 document.addEventListener('dragover',e=>{e.preventDefault();});document.addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer.files.length)loadFiles([...e.dataTransfer.files]);});
+function closeMultiFilters(except=null){for(const details of document.querySelectorAll('details.multi-select[open]'))if(details!==except)details.open=false;}
+document.addEventListener('toggle',e=>{const details=e.target;if(!details.matches?.('details.multi-select')||!details.open)return;closeMultiFilters(details);const search=details.querySelector('[data-multi-search]');if(search)requestAnimationFrame(()=>search.focus());},true);
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;const details=e.target.closest?.('details.multi-select')||document.querySelector('details.multi-select[open]');if(details){details.open=false;details.querySelector('summary')?.focus();}});
+document.addEventListener('input',e=>{const el=e.target;if(el.dataset.multiSearch===undefined)return;const menu=el.closest('.multi-menu'),query=normalize(el.value);let visible=0;for(const option of menu.querySelectorAll('[data-multi-option]')){const show=!query||normalize(option.textContent).includes(query);option.hidden=!show;if(show)visible++;}menu.dataset.empty=String(!visible);});
 document.addEventListener('click',e=>{
+ if(!e.target.closest('.multi-select'))closeMultiFilters();
  const target=e.target.closest('button');if(!target||state.loading)return;
  if(target.dataset.module)navigate(target.dataset.module);
  if(target.dataset.subtab){state.subtabs[state.module]=target.dataset.subtab;draw();}
  if(target.dataset.auditTicket){state.auditTicket=target.dataset.auditTicket;draw();}
- if(target.dataset.clearMulti){filterState()[target.dataset.clearMulti]=[];state.openMulti=target.dataset.clearMulti;state.page=0;draw();}
+ if(target.dataset.clearMulti){filterState()[target.dataset.clearMulti]=[];state.page=0;draw();}
  if(target.dataset.restore){delete state.settings.minimum[target.dataset.restore];persist();draw();}
  if(target.dataset.action==='clear-filters'){state.filters[state.module]={};state.page=0;draw();}
  if(target.dataset.action==='select-visible'){state.result.items.forEach(i=>state.maxminSelected.add(i.key));draw();toast(`${state.result.items.length} productos visibles seleccionados.`);}
@@ -271,7 +277,7 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('change',e=>{
  const el=e.target;if(state.loading)return;
- if(el.dataset.multiFilter){const name=el.dataset.multiFilter,current=new Set(filterState()[name]||[]);el.checked?current.add(el.value):current.delete(el.value);filterState()[name]=[...current];state.openMulti=name;state.page=0;draw();}
+ if(el.dataset.multiFilter){const name=el.dataset.multiFilter,current=new Set(filterState()[name]||[]);el.checked?current.add(el.value):current.delete(el.value);filterState()[name]=[...current];state.page=0;draw();}
  if(el.dataset.maxminSelect){el.checked?state.maxminSelected.add(el.dataset.maxminSelect):state.maxminSelected.delete(el.dataset.maxminSelect);draw();}
  if(el.dataset.filter){filterState()[el.dataset.filter]=el.value;state.page=0;draw();}
  if(el.dataset.minimum){const v=Number(el.value);if(el.value===''||!Number.isFinite(v)||v<0){toast('Ingresa un mínimo de cero o mayor.');draw();return;}state.settings.minimum[el.dataset.minimum]=v;persist();draw();}

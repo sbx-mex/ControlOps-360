@@ -20,7 +20,8 @@ assert.equal(files.length,3,'Provide venta, uso, auditoría fixtures in that ord
 const expectedSales=sources[0].salesFacts;
 const expectedOrders=new Set(expectedSales.map(r=>r.transactionKey)).size;
 const expectedSalesCents=Math.round(expectedSales.reduce((s,r)=>s+r.total,0)*100);
-const expectedNegative=sources[2].auditTickets.filter(r=>r.total<0);
+const voidTicketKeys=new Set(sources[2].auditVoids.map(r=>r.ticketKey));
+const expectedNegative=sources[2].auditTickets.filter(r=>r.total<0&&voidTicketKeys.has(r.ticketKey));
 const stores=new Set(sources.flatMap(s=>[...operationalStores(s)]));
 assert.equal(stores.size,1,'All three local motors must belong to one store.');
 const store=[...stores][0];

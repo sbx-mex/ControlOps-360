@@ -59,8 +59,10 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertIn("createExecutiveWorkbook(report)", self.ui)
         self.assertIn("createExecutivePdf(report)", self.ui)
     def test_maxmin_is_selectable_compact_and_multi_filter(self):
-        for token in ('data-multi-filter=', 'data-maxmin-select=', 'step="0.1"', 'PDF etiquetas', 'primary=i.sapName', "'outputView','Ver en'", 'Pz / Caja'):
+        for token in ('data-multi-filter=', 'data-multi-search=', 'name="controlops-filters"', 'data-maxmin-select=', 'step="0.1"', 'PDF etiquetas', 'primary=i.sapName', "'outputView','Ver en'", 'Pz / Caja'):
             self.assertIn(token, self.ui)
+        self.assertNotIn("state.openMulti", self.ui)
+        self.assertIn("closeMultiFilters", self.ui)
         export = (ROOT / "assets" / "export.mjs").read_text()
         self.assertIn("ACTUALIZACIÓN / IMPRESIÓN", export)
         self.assertIn("PZ / CAJA", export)
@@ -70,7 +72,7 @@ class SitioPublicoTests(unittest.TestCase):
         for obsolete in ("metric('Uso del periodo'", "metric('Promedio diario'", "metric('Conversión'"):
             self.assertNotIn(obsolete, trend)
     def test_separate_module_flows(self):
-        for name in ("maxminView", "trendView", "orderView", "peakView", "normalView", "bakingView", "topView", "auditView", "aboutView"):
+        for name in ("maxminView", "trendView", "orderView", "peakView", "normalView", "bakingView", "topView", "auditView"):
             self.assertIn("function " + name, self.ui)
     def test_normalizados_has_four_views_and_global_multi_filters(self):
         self.assertIn("tabs('normal',['Resumen','Vasos y tapas','FHW','Crema batida'])", self.ui)
@@ -80,7 +82,7 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertNotIn("metric('Devoluciones'", self.ui)
         self.assertNotIn("metric('Bebidas en vaso'", self.ui)
     def test_auditoria_is_one_void_flow_with_multi_filters_and_ticket_detail(self):
-        audit = self.ui.split("function auditView(){", 1)[1].split("function aboutView(){", 1)[0]
+        audit = self.ui.split("function auditView(){", 1)[1].split("function navigationView(", 1)[0]
         self.assertNotIn("tabs('audit'", audit)
         self.assertNotIn("Negativas", audit)
         for token in ("multiFilter('reasons','Motivos'", "multiFilter('partners','Partners'", "data-audit-ticket=", "DESGLOSE DEL TICKET", "Concentración por partner"):
@@ -96,8 +98,11 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertIn("Mismo CeCo, tipo y periodo", self.ui)
         self.assertIn("Compostable:", self.ui)
     def test_management_navigation_and_lazy_heavy_modules(self):
-        for token in ("Resumen 360°", "function financeView()", "function scopeView()", "function sourcesView()", "← Resumen"):
+        for token in ("Resumen 360°", "function menuView()", "Selecciona una herramienta", "← Resumen"):
             self.assertIn(token, self.html + self.ui)
+        for token in ("Acerca de", "Seguridad", "Finanzas", "Alcance y calidad", "Fuentes cargadas", "function financeView()", "function scopeView()", "function sourcesView()"):
+            self.assertNotIn(token, self.html + self.ui)
+        self.assertIn("#uploadButton{background:#00a862", (ROOT / "assets/styles.css").read_text())
         first_lines = "\n".join(self.ui.splitlines()[:2])
         for module in ("parameters.mjs", "reader.mjs", "export.mjs", "transit.mjs"):
             self.assertNotIn(f"from './{module}'", first_lines)

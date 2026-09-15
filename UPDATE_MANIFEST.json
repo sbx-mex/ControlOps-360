@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
   "project": "sbx-mex/ControlOps-360",
-  "version": "6.1.0",
-  "baseline": "ad3972fa08d5f2ca8241d69323aa3c48468ca6c0",
-  "date": "2026-09-14",
-  "release": "gestion-360-trazable",
+  "version": "6.2.1",
+  "baseline": "bb902a622b13c529f13365c8ab0483beb5ef70f5",
+  "date": "2026-09-15",
+  "release": "filtros-intuitivos-verde",
   "update_policy": {
     "replacement": "atomic",
     "python_gate": "scripts/auditar_proyecto.py",
@@ -12,10 +12,8 @@
     "operational_files_allowed": false
   },
   "capabilities": [
-    "summary_360",
-    "finances",
-    "scope_quality",
-    "loaded_sources",
+    "available_tools_menu",
+    "quick_filters",
     "maxmin",
     "trend",
     "order_woe",
@@ -28,8 +26,8 @@
     "void_audit"
   ],
   "continuity_matrix": [
-    {"module":"Resumen 360°","latest_request":"Situación, vigencia, alcance y acción sin redundancia","current":"Centro de herramientas","gap":"Sin lectura gerencial","change":"Resumen real con cobertura y alertas","validation":"gestion360 tests 01, 11, 12 y 13"},
-    {"module":"Finanzas","latest_request":"Ventas, variaciones y contexto","current":"Datos dispersos en Peak y Esfuerzo","gap":"Sin vista consolidada","change":"Semana actual, comparación y detalle","validation":"gestion360 tests 01, 13 y 15"},
+    {"module":"Resumen 360°","latest_request":"Mostrar sólo las opciones disponibles","current":"Menú esencial","gap":"Ninguno","change":"Elimina bloques informativos y módulos sin respaldo","validation":"site tests y auditor Python"},
+    {"module":"Filtros","latest_request":"Selección rápida e intuitiva sin menús abiertos","current":"Cierre automático y búsqueda local","gap":"Ninguno","change":"Un menú abierto, cierre al elegir, Escape y clic exterior","validation":"site tests y auditor Python"},
     {"module":"Max & Min","latest_request":"Mantener selección, filtros y exportación","current":"Estable","gap":"Ninguna regresión aceptable","change":"Conservado","validation":"engine y export tests"},
     {"module":"Tendencia","latest_request":"Producto y días comparables","current":"Estable","gap":"Ninguna regresión aceptable","change":"Conservado","validation":"engine tests"},
     {"module":"Pedido WOE","latest_request":"Cruces SAP/DIA y tránsito seguros","current":"Estable","gap":"Evidencia de cardinalidad incompleta","change":"Evidencia estructurada de cruce","validation":"pedido WOE audit y tests"},
@@ -37,8 +35,7 @@
     {"module":"Normalizados","latest_request":"Vasos, FHW y crema con filtros múltiples","current":"Estable","gap":"Ninguna regresión aceptable","change":"Conservado","validation":"engine y site tests"},
     {"module":"Ensamble y Horneo","latest_request":"Cruces, redondeo y trazabilidad","current":"Estable","gap":"Evidencia de join incompleta","change":"Cardinalidad y conteos verificables","validation":"ensamble audit y tests"},
     {"module":"Top y Esfuerzo","latest_request":"Indicadores filtrables y consistentes","current":"Estable","gap":"Ninguna regresión aceptable","change":"Reagrupados bajo Indicadores","validation":"engine tests"},
-    {"module":"Auditoría","latest_request":"Voids con foco, Reopen y desglose por ticket","current":"Estable","gap":"Ninguna regresión aceptable","change":"Conservado bajo Control","validation":"engine y site tests"},
-    {"module":"Alcance y fuentes","latest_request":"CeCo aislado, duplicados justificados y faltantes visibles","current":"Sólo estado básico en Seguridad","gap":"Decisiones de carga no trazables","change":"Vistas dedicadas y selección CeCo-tipo-periodo","validation":"compatibilidad y gestion360 tests"}
+    {"module":"Auditoría","latest_request":"Motor_01 estable sin atribuciones erróneas","current":"ID de empleado reutilizado ya no bloquea","gap":"Ninguno","change":"Conserva el ticket como Partner no identificado","validation":"engine test y tres Motores reales"}
   ],
   "security": [
     "local_processing",

@@ -148,15 +148,19 @@ def audit_integration(root: Path = ROOT) -> dict[str, object]:
         "#GreenApronService",
         "CONFIDENCIAL · USO OPERATIVO INTERNO",
         "Diseñador por Jorge Alcantar Aguiar &amp; Enrique César Flores",
-        "https://sbx-mex.github.io/CodeBrew_Merch/",
-        "https://sbx-mex.github.io/Lay-Out_2.0/",
     )
     visible_surface = index + "\n" + ui
     if not all(token in visible_surface for token in visible_contract):
-        raise AuditError("Identidad, confidencialidad o proyectos conectados incompletos.")
-    management_contract = ("Resumen 360°", "function financeView()", "function scopeView()", "function sourcesView()", "Mismo CeCo, tipo y periodo", "loadParameters", "loadReader", "loadExporter")
+        raise AuditError("Identidad o confidencialidad incompleta.")
+    management_contract = ("Resumen 360°", "Selecciona una herramienta", "Mismo CeCo, tipo y periodo", "loadParameters", "loadReader", "loadExporter", 'name="controlops-filters"', "data-multi-search", "closeMultiFilters")
     if not all(token in visible_surface for token in management_contract):
-        raise AuditError("Experiencia gerencial, trazabilidad o carga diferida incompleta.")
+        raise AuditError("Menú operativo, filtros rápidos o carga diferida incompleta.")
+    hidden_sections = ("Acerca de", "Seguridad", "Finanzas", "Alcance y calidad", "Fuentes cargadas", "function financeView()", "function scopeView()", "function sourcesView()")
+    visible_extras = [token for token in hidden_sections if token in visible_surface]
+    if visible_extras:
+        raise AuditError("La interfaz mínima conserva secciones ocultas: " + ", ".join(visible_extras))
+    if "#uploadButton{background:#00a862" not in _read("assets/styles.css", root):
+        raise AuditError("La carga principal no está identificada en verde.")
     export_contract = ("CONFIDENCIAL · USO OPERATIVO INTERNO", "Diseñador por Jorge Alcantar Aguiar", "Enrique César Flores", "headerFooter")
     if not all(token in export for token in export_contract):
         raise AuditError("El pie de exportación no está unificado.")
