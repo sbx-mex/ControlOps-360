@@ -74,6 +74,17 @@ class SitioPublicoTests(unittest.TestCase):
     def test_separate_module_flows(self):
         for name in ("maxminView", "trendView", "orderView", "peakView", "normalView", "bakingView", "topView", "auditView"):
             self.assertIn("function " + name, self.ui)
+    def test_order_uses_today_and_contextual_reception_dates(self):
+        order = self.ui.split("function orderView(){", 1)[1].split("function peakView(){", 1)[0]
+        self.assertIn("settings.today=currentToday", order)
+        self.assertIn("capture-lock", order)
+        self.assertNotIn('data-order-setting="today"', order)
+        self.assertIn("¿Para cuándo es el pedido?", order)
+        self.assertNotIn("Próxima entrega", order)
+        self.assertIn("nextReception(settings.delivery,[index])", order)
+        self.assertIn("active&&date", order)
+        for target in ("order-cycle", "order-transit", "order-count"):
+            self.assertIn(f'data-order-jump="{target}"', order)
     def test_normalizados_has_four_views_and_global_multi_filters(self):
         self.assertIn("tabs('normal',['Resumen','Vasos y tapas','FHW','Crema batida'])", self.ui)
         self.assertIn("multiFilter('weeks','Semanas'", self.ui)

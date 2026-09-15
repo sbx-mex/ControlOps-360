@@ -173,6 +173,10 @@ def audit_interface(root: Path = ROOT) -> dict[str, bool]:
     obsolete = ("Uso pendiente hoy", "Base de vasos", "Referencia de uso", "SAP/DIA validados", "Artículos en pedido", "No aplican / sin cruce")
     checks = {
         "controles_obsoletos_retirados": not any(token in order for token in obsolete),
+        "fecha_actual_fija": "settings.today=currentToday" in order and 'data-order-setting="today"' not in order and "capture-lock" in order,
+        "pregunta_fecha_pedido_clara": "¿Para cuándo es el pedido?" in order and "Próxima entrega" not in order,
+        "recepciones_con_fecha_contextual": "nextReception(settings.delivery,[index])" in order and "active&&date" in order,
+        "navegacion_por_actividad": all(token in ui for token in ('data-order-jump="order-cycle"', 'data-order-jump="order-transit"', 'data-order-jump="order-count"', "scrollIntoView")),
         "pdf_transito_local": "parseOrderPdf" in ui and (root / "assets" / "vendor" / "pdf.min.mjs").is_file(),
         "duplicados_bloqueados": "usedPurchaseOrders" in (root / "assets" / "transit.mjs").read_text(encoding="utf-8"),
         "exportacion_pedagogica": "order-woe" in (root / "assets" / "export.mjs").read_text(encoding="utf-8"),

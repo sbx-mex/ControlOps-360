@@ -1,5 +1,13 @@
 # Historial consolidado
 
+## 6.3.0 · Pedido WOE directo e intuitivo
+
+- Fija la fecha de captura al día actual y elimina su edición manual.
+- Renombra la decisión principal a “¿Para cuándo es el pedido?”.
+- Muestra la próxima fecha real únicamente en los días de recepción activados.
+- Convierte el progreso en navegación rápida y enfoca las actividades en programar, agregar tránsito, contar y descargar.
+- Añade validaciones de interfaz para impedir que estas mejoras se pierdan en futuras actualizaciones.
+
 ## 6.2.1 · Filtros rápidos y puerta verde
 
 - Cierra cada filtro múltiple al seleccionar para que el resultado quede visible de inmediato.
