@@ -9,6 +9,7 @@ Control Ops 360° opera con privacidad desde diseño: los Excel y PDF se leen de
 - GitHub Actions fijadas a commits completos y con permisos de sólo lectura.
 - Límites de cantidad y tamaño antes de leer Excel o PDF.
 - Cruce de CeCo, SAP y DIA con bloqueo ante contradicciones.
+- PDF de tránsito validado contra la identidad de los Motores: CeCo exacto cuando está disponible y nombre similar verificable como respaldo; un conflicto o ausencia de identidad bloquea la incorporación.
 - Aislamiento por CeCo y selección determinística por tipo y periodo; toda omisión queda justificada.
 - Caché acotada por SHA-256 y carga diferida de componentes pesados.
 - Sesión recuperable en IndexedDB: conserva únicamente la representación procesada de los Motores dentro del mismo navegador y la reemplaza en una transacción local.

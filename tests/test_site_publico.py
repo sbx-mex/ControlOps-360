@@ -76,12 +76,14 @@ class SitioPublicoTests(unittest.TestCase):
             self.assertIn("function " + name, self.ui)
     def test_order_uses_today_and_contextual_reception_dates(self):
         order = self.ui.split("function orderView(){", 1)[1].split("function peakView(){", 1)[0]
-        self.assertIn("settings.today=currentToday", order)
+        self.assertIn("settings.today=currentToday", self.ui)
         self.assertIn("capture-lock", order)
         self.assertNotIn('data-order-setting="today"', order)
         self.assertIn("¿Para cuándo es el pedido?", order)
         self.assertNotIn("Próxima entrega", order)
-        self.assertIn("nextReception(settings.delivery,[index])", order)
+        self.assertIn('select data-order-setting="delivery"', order)
+        self.assertIn("availableOrderDates(settings.today,[index],transitOrders,1)", order)
+        self.assertIn('data-action="select-next-order"', order)
         self.assertIn("active&&date", order)
         for target in ("order-cycle", "order-transit", "order-count"):
             self.assertIn(f'data-order-jump="{target}"', order)
@@ -92,8 +94,24 @@ class SitioPublicoTests(unittest.TestCase):
             self.assertIn(label, self.ui)
         self.assertIn("providerAlias", operations)
         self.assertIn("f.provider&&provider!==providerAlias(f.provider)", operations)
-        self.assertIn("filter(order=>providerAlias(order.providerAlias||order.provider)===provider)", order)
+        self.assertIn("filter(order=>providerAlias(order.providerAlias||order.provider)===providerAlias(provider))", self.ui)
+        self.assertIn("orderTransitFor(provider)", order)
         self.assertIn("PEDIDO POR PROVEEDOR", order)
+
+    def test_order_validates_store_identity_and_editable_daily_use(self):
+        order = self.ui.split("function orderView(){", 1)[1].split("function peakView(){", 1)[0]
+        transit = (ROOT / "assets" / "transit.mjs").read_text()
+        export = (ROOT / "assets" / "export.mjs").read_text()
+        for token in ("TIENDA ACTIVA DE LOS MOTORES", "LECTURA APROBADA", "PDF RECHAZADO"):
+            self.assertIn(token, self.ui)
+        for token in ("transitIdentityVerified", "pruneUnverifiedTransitOrders", "necesita validarse de nuevo por seguridad"):
+            self.assertIn(token, self.ui)
+        for token in ("validateTransitStore", "similarStoreName", "storeCeco", "storeName"):
+            self.assertIn(token, transit)
+        self.assertIn('data-order-field="dailyUse"', order)
+        self.assertIn("data-reset-order-use", order)
+        self.assertIn("row.quantityLabel", export)
+        self.assertIn("Uso diario", export)
     def test_motor_session_is_recoverable_and_reset_is_explicit(self):
         for element_id in ("saveStatus", "resetButton", "resetConfirmation", "cancelResetButton", "confirmResetButton"):
             self.assertIn(element_id, self.parser.ids)

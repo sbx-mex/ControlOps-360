@@ -5,6 +5,7 @@ const PROVIDERS = [
 ];
 
 const ORDER_LINE = /^\s*(\d{3,})\s+(.+?)\s+(\d+(?:[.,]\d+)?)\s+(CAJ|PQT|PZA|BOT|BTE|ROL|GAL|SOB|KG|LT)\s+(\d{5,})\s*$/i;
+const STORE_STOP_WORDS = new Set(['sb','starbucks','coffee','mexico','mx','tienda','sucursal','de','del','la','las','los','y','sa','cv']);
 
 export function compactCode(value) {
   const digits = String(value ?? '').replace(/\D/g, '');
@@ -16,6 +17,33 @@ function toIso(value) {
   const date = new Date(Date.UTC(year, month - 1, day));
   if (!day || !month || !year || date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return '';
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function storeTokens(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(token => token && !STORE_STOP_WORDS.has(token));
+}
+
+export function similarStoreName(left, right) {
+  const a = storeTokens(left), b = storeTokens(right);
+  if (!a.length || !b.length) return false;
+  const matches = a.filter(token => b.some(other => token === other || (token.startsWith(other) || other.startsWith(token)) && (Math.min(token.length, other.length) >= 4 || Math.min(token.length, other.length) >= 3 && a.length > 1 && b.length > 1))).length;
+  return matches / Math.max(a.length, b.length) >= 0.6;
+}
+
+function extractStoreName(lines) {
+  const candidates = [];
+  const contact = lines.findIndex(line => /Persona de contacto\s*\/\s*Tel/i.test(line));
+  if (contact >= 0) {
+    const inlineParts = lines[contact].split('/');
+    if (inlineParts.length >= 3) candidates.push(inlineParts.at(-1).trim());
+    candidates.push(...lines.slice(contact + 1, contact + 4).map(line => line.includes('/') ? line.split('/').at(-1).trim() : line.trim()));
+  }
+  const supply = lines.findIndex(line => /S[ií]rvase suministrar a/i.test(line));
+  if (supply >= 0) candidates.push(...lines.slice(supply + 1, supply + 6));
+  return candidates.find(value => {
+    const text = String(value || '').trim();
+    return storeTokens(text).length && !/^(?:B?\d+|Direcci[oó]n|Av\.|Calle|Carretera|CP\b|\d{5}\b)/i.test(text) && !/STARBUCKS COFFEE|SAPI|RFC/i.test(text);
+  })?.trim() || '';
 }
 
 function pageLines(items) {
@@ -45,6 +73,8 @@ export function parseTransitLines(lines, sourceName = 'pedido.pdf') {
   const providerAlias = PROVIDERS.find(([name]) => provider.toUpperCase().includes(name))?.[1] || 'DIA';
   const orderMatch = fullText.match(/(\d{8,12})\s*\/\s*(\d{2}\/\d{2}\/\d{4})/);
   const deliveryMatch = fullText.match(/Fecha de entrega(?:\s+D[ií]a)?\s*(\d{2}\/\d{2}\/\d{4})/i);
+  const storeCeco = fullText.match(/\b(?:CeCo|Centro\s+de\s+costo|ID\s*tienda)\s*[:#-]?\s*(\d{5})\b/i)?.[1] || String(sourceName).match(/(?:^|[_\s-])(\d{5})(?:[_\s-]|$)/)?.[1] || '';
+  const storeName = extractStoreName(lines);
   const parsed = [];
   for (const line of lines) {
     if (/N[º°]?\s*Material|Núm\.\s*pedido|Fecha de entrega/i.test(line)) continue;
@@ -63,17 +93,30 @@ export function parseTransitLines(lines, sourceName = 'pedido.pdf') {
   if (!orderMatch || !orderDate || !deliveryDate || !parsed.length) {
     throw new Error(`No pude reconocer ${sourceName}. Usa un PDF de pedido SAP con texto seleccionable.`);
   }
-  return {id: orderMatch[1], purchaseOrder: orderMatch[1], provider, providerAlias, orderDate, deliveryDate, lines: parsed, sourceName};
+  return {id: orderMatch[1], purchaseOrder: orderMatch[1], provider, providerAlias, orderDate, deliveryDate, storeCeco, storeName, lines: parsed, sourceName};
 }
 
-export function validateTransitOrder(order, today, usedPurchaseOrders = new Set(), usedFingerprints = new Set()) {
+export function validateTransitStore(order, expectedStore = {}) {
+  const expectedCeco = compactCode(expectedStore.ceco), pdfCeco = compactCode(order.storeCeco), expectedName = String(expectedStore.name || '').trim(), pdfName = String(order.storeName || '').trim();
+  if (!expectedCeco && !expectedName) throw new Error('Carga primero los Motores para identificar la tienda.');
+  if (!pdfCeco && !pdfName) throw new Error('El PDF no identifica un CeCo ni un nombre de tienda verificable.');
+  let cecoMatch=false,nameMatch=false;
+  if (pdfCeco && expectedCeco) {if (pdfCeco !== expectedCeco) throw new Error(`El PDF corresponde al CeCo ${pdfCeco}, no al CeCo ${expectedCeco} de los Motores.`);cecoMatch=true;}
+  if (pdfName && expectedName) {if (!similarStoreName(pdfName, expectedName)) throw new Error(`El PDF corresponde a “${pdfName}”, no a “${expectedName}”.`);nameMatch=true;}
+  if (!cecoMatch&&!nameMatch) throw new Error('El PDF no contiene una identidad comparable con el CeCo o nombre de los Motores.');
+  return {cecoMatch,nameMatch};
+}
+
+export function validateTransitOrder(order, today, usedPurchaseOrders = new Set(), usedFingerprints = new Set(), expectedStore = null) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) throw new Error('Define una fecha de captura válida antes de cargar tránsito.');
+  const storeValidation=expectedStore?validateTransitStore(order, expectedStore):null;
   if (order.deliveryDate < today) throw new Error(`El pedido ${order.purchaseOrder} tiene entrega anterior a la fecha de captura.`);
   if (usedPurchaseOrders.has(order.purchaseOrder)) throw new Error(`El pedido ${order.purchaseOrder} ya fue cargado; el tránsito no se duplicó.`);
   if (order.fileFingerprint && usedFingerprints.has(order.fileFingerprint)) throw new Error(`${order.sourceName} ya fue cargado; se conservó una sola copia.`);
   if (!order.lines.every(line => compactCode(line.sap) && compactCode(line.material) && Number.isFinite(line.quantity) && line.quantity >= 0)) {
     throw new Error(`${order.sourceName} contiene líneas incompletas o cantidades inválidas.`);
   }
+  return {store:storeValidation};
 }
 
 export async function parseOrderPdf(file) {

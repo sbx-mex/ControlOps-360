@@ -1,5 +1,14 @@
 # Historial consolidado
 
+## 6.5.0 · Pedido WOE con identidad segura
+
+- Remasteriza la programación del pedido con días activos, lista de fechas disponibles y selección rápida del siguiente pedido.
+- Retira de la lista cualquier fecha que ya esté cubierta por un PDF en tránsito y mueve la selección a la siguiente fecha libre.
+- Compara la identidad del PDF con el CeCo y nombre de la tienda cargada desde los Motores; confirma cada lectura aprobada y rechaza la ajena sin incorporarla.
+- Permite ajustar y restaurar el uso diario por producto sin alterar la base histórica.
+- Incluye en PDF y Excel el uso diario aplicado y conserva la cantidad final a pedir.
+- Amplía la auditoría Python y las pruebas JavaScript con Luna Parc, Galerías Perinorte, tienda ajena, fechas miércoles/sábado y tránsito duplicado.
+
 ## 6.4.0 · Proveedor y sesión recuperable
 
 - Añade a Pedido WOE un selector directo para `DIA`, `Maquila | Café Sirena` y `Lala | Comercializadora Lácteos`.

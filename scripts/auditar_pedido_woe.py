@@ -9,7 +9,7 @@ import sys
 import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +38,52 @@ def canonical_unit(value: object) -> str:
         "LT": {"LITRO", "LITROS", "LT", "L"},
     }
     return next((target for target, values in aliases.items() if unit in values), unit)
+
+
+STORE_STOP_WORDS = {
+    "sb", "starbucks", "coffee", "mexico", "mx", "tienda", "sucursal",
+    "de", "del", "la", "las", "los", "y", "sa", "cv",
+}
+
+
+def store_words(value: object) -> list[str]:
+    text = unicodedata.normalize("NFD", str(value or ""))
+    plain = "".join(char for char in text if unicodedata.category(char) != "Mn").lower()
+    return [word for word in re.findall(r"[a-z0-9]+", plain) if word not in STORE_STOP_WORDS]
+
+
+def similar_store_name(left: object, right: object) -> bool:
+    a, b = store_words(left), store_words(right)
+    if not a or not b:
+        return False
+    matches = sum(
+        any(
+            word == other
+            or (word.startswith(other) or other.startswith(word))
+            and (
+                min(len(word), len(other)) >= 4
+                or min(len(word), len(other)) >= 3 and len(a) > 1 and len(b) > 1
+            )
+            for other in b
+        )
+        for word in a
+    )
+    return matches / max(len(a), len(b)) >= 0.6
+
+
+def available_order_dates(today: str, weekdays: list[int], occupied: list[str], limit: int = 8) -> list[str]:
+    start = date.fromisoformat(today)
+    active = {day for day in weekdays if 0 <= day <= 6}
+    blocked = set(occupied)
+    result: list[str] = []
+    for offset in range(1, 113):
+        candidate = start + timedelta(days=offset)
+        key = candidate.isoformat()
+        if candidate.weekday() in active and key not in blocked:
+            result.append(key)
+            if len(result) >= limit:
+                break
+    return result
 
 
 @dataclass(frozen=True)
@@ -114,6 +160,11 @@ def scenario_matrix() -> list[str]:
         "remisión duplicada detectable": len({"4500000001", "4500000001"}) == 1,
         "misma fecha distinta remisión": len({"4500000001", "4500000002"}) == 2,
         "huella duplicada detectable": len({"sha-a", "sha-a"}) == 1,
+        "nombre Luna Parc compatible": similar_store_name("SB_Luna_Parc", "Luna Parc"),
+        "abreviación Gal Perinorte compatible": similar_store_name("SB_Gal_Perinorte", "Galerías Perinor"),
+        "nombre de otra tienda rechazado": not similar_store_name("SB_Luna_Parc", "Galerías Perinor"),
+        "miércoles y sábado calculados": available_order_dates("2026-09-15", [2, 5], [], 3) == ["2026-09-16", "2026-09-19", "2026-09-23"],
+        "miércoles en tránsito se retira": available_order_dates("2026-09-15", [2, 5], ["2026-09-16"], 3) == ["2026-09-19", "2026-09-23", "2026-09-26"],
     }
     failed = [name for name, passed in scenarios.items() if not passed]
     if failed:
@@ -169,20 +220,30 @@ def audit_catalog(root: Path = ROOT) -> dict[str, int]:
 
 def audit_interface(root: Path = ROOT) -> dict[str, bool]:
     ui = (root / "assets" / "ui.mjs").read_text(encoding="utf-8")
+    operations = (root / "assets" / "operations.mjs").read_text(encoding="utf-8")
+    transit = (root / "assets" / "transit.mjs").read_text(encoding="utf-8")
+    export = (root / "assets" / "export.mjs").read_text(encoding="utf-8")
     order = ui.split("function orderView(){", 1)[1].split("function peakView(){", 1)[0]
     obsolete = ("Uso pendiente hoy", "Base de vasos", "Referencia de uso", "SAP/DIA validados", "Artículos en pedido", "No aplican / sin cruce")
     checks = {
         "controles_obsoletos_retirados": not any(token in order for token in obsolete),
-        "fecha_actual_fija": "settings.today=currentToday" in order and 'data-order-setting="today"' not in order and "capture-lock" in order,
-        "pregunta_fecha_pedido_clara": "¿Para cuándo es el pedido?" in order and "Próxima entrega" not in order,
-        "recepciones_con_fecha_contextual": "nextReception(settings.delivery,[index])" in order and "active&&date" in order,
+        "fecha_actual_fija": "settings.today=currentToday" in ui and 'data-order-setting="today"' not in order and "capture-lock" in order,
+        "fecha_pedido_en_lista": "¿Para cuándo es el pedido?" in order and 'select data-order-setting="delivery"' in order and 'input type="date"' not in order,
+        "recepciones_con_fecha_contextual": "availableOrderDates(settings.today,[index],transitOrders,1)" in order and "active&&date" in order,
+        "fechas_de_transito_retiradas": "availableOrderDates" in operations and "!occupied.has(candidate.dateKey)" in operations,
+        "accion_rapida_siguiente": 'data-action="select-next-order"' in order and "Usar siguiente" in order,
         "navegacion_por_actividad": all(token in ui for token in ('data-order-jump="order-cycle"', 'data-order-jump="order-transit"', 'data-order-jump="order-count"', "scrollIntoView")),
         "proveedores_explicitos": all(token in ui for token in ("DIA", "Maquila | Café Sirena", "Lala | Comercializadora Lácteos", "PEDIDO POR PROVEEDOR")),
-        "productos_por_proveedor": "f.provider&&provider!==providerAlias(f.provider)" in (root / "assets" / "operations.mjs").read_text(encoding="utf-8"),
-        "transito_por_proveedor": "filter(order=>providerAlias(order.providerAlias||order.provider)===provider)" in order,
+        "productos_por_proveedor": "f.provider&&provider!==providerAlias(f.provider)" in operations,
+        "transito_por_proveedor": "filter(order=>providerAlias(order.providerAlias||order.provider)===providerAlias(provider))" in ui and "orderTransitFor(provider)" in order,
         "pdf_transito_local": "parseOrderPdf" in ui and (root / "assets" / "vendor" / "pdf.min.mjs").is_file(),
-        "duplicados_bloqueados": "usedPurchaseOrders" in (root / "assets" / "transit.mjs").read_text(encoding="utf-8"),
-        "exportacion_pedagogica": "order-woe" in (root / "assets" / "export.mjs").read_text(encoding="utf-8"),
+        "duplicados_bloqueados": "usedPurchaseOrders" in transit,
+        "identidad_tienda_validada": all(token in transit for token in ("validateTransitStore", "similarStoreName", "storeCeco", "storeName")) and "motorIdentity" in ui,
+        "transito_anterior_revalidado": all(token in ui for token in ("transitIdentityVerified", "pruneUnverifiedTransitOrders", "necesita validarse de nuevo por seguridad")),
+        "confirmacion_antes_de_incorporar": all(token in ui for token in ("TIENDA ACTIVA DE LOS MOTORES", "LECTURA APROBADA", "PDF RECHAZADO", "No se incorporó al tránsito")),
+        "uso_diario_editable": 'data-order-field="dailyUse"' in order and "data-reset-order-use" in order,
+        "pdf_con_cantidad_y_uso": all(token in export for token in ("CANTIDAD", "A PEDIR", "row.quantityLabel", "Uso diario", "row.dailyUse")),
+        "exportacion_pedagogica": "order-woe" in export,
     }
     if not all(checks.values()):
         raise AssertionError(f"Interfaz incompleta: {checks}")
