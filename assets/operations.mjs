@@ -364,7 +364,7 @@ export function auditStore(d,f={}){
 }
 
 export const MOTOR_REQUIREMENTS=Object.freeze([
- {id:'sales',name:'Ventas',detail:'Finanzas, operación e indicadores',types:['sales']},
+ {id:'sales',name:'Ventas',detail:'Operación e indicadores',types:['sales']},
  {id:'usage',name:'Uso y stock',detail:'Inventario y Pedido WOE',types:['usage']},
  {id:'audit',name:'Auditoría',detail:'Voids y revisión por ticket',types:['auditTicket','auditVoid','auditLegacy']},
 ]);

@@ -81,7 +81,15 @@ export function addReferenceRows(d,type,headers,rows,source={}){
   if(type==="food"){const assembly=String(get("Nombre Unificado Ensamble")).trim(),assemblyFlag=booleanValue(get("Ensamble"));key=normalize(get("Item"));value={item:assembly?String(get("Item")).trim():key,food:booleanValue(get("Alimento")),pieces:numberValue(get("#Alimento")),bis:booleanValue(get("BIS")),bakingName:String(get("Nombre Unificado BIS")).trim(),assembly,assemblyEnabled:assemblyFlag===null?!!assembly:assemblyFlag,ingredient:String(get("Ingrediente ensamble","Ingediente ensamble")).trim()};if(value.food===null||value.bis===null||!(value.pieces>0)||(value.bis&&!value.bakingName)||(value.assemblyEnabled&&!value.assembly))throw new Error("Regla de alimento sin clasificación, factor o nombre válido.");}
   if(type==="baking"){key=normalize(get("Producto en reporte"));const tray=String(get("Máximo por charola"));value={product:String(get("Producto en reporte")),group:String(get("Grupo de horneo")),thaw:String(get("Descongelacion")),bake:String(get("Horneo")),temperature:String(get("Temperatura")),maxTray:numberValue(tray.match(/\d+/)?.[0]),trayText:tray,together:String(get("Se puede hornear junto"))};if(!(value.maxTray>0))throw new Error("Horneo sin capacidad válida por charola.");}
   if(type==="woe"){const micros=String(get("Nombre Micros")).trim(),dia=cleanId(get("#DIA"));key=normalize(micros);value={micros,sap:cleanId(get("#SAP")),dia:dia?dia.padStart(6,"0"):"",provider:String(get("Proveedor")),description:String(get("Descripcion WOE")),microsUnit:String(get("Unidad de Medida Micros Relacion con el uso prom en cuestion de unidad")),ump:String(get("UMP WOE")),umb:numberValue(get("UMB WOE Cantidad pedido")),relation:numberValue(get("Relacion Unidad de Medida Micros con # Total")),unit:String(get("Unidad WOE")),compostable:booleanValue(String(get("Comentario Para Revision")).match(/Compostable\s*:\s*(Si|Sí|No)/i)?.[1])};}
-  if(!key)throw new Error(`Clave vacía en ${type}.`);if(catalog.has(key)&&JSON.stringify(catalog.get(key))!==JSON.stringify(value))throw new Error(`Cruce ambiguo en ${type}: ${key}.`);catalog.set(key,value);added++;
+  if(!key)throw new Error(`Clave vacía en ${type}.`);
+  if(catalog.has(key)&&JSON.stringify(catalog.get(key))!==JSON.stringify(value)){
+   // A reused employee ID must not block the operational facts in Motor_01.
+   // Keep the join unresolved so Auditoría shows "Partner no identificado"
+   // instead of assigning the void to the wrong person.
+   if(type==="employee"){catalog.set(key,{store:value.store,id:value.id,name:"",position:"",ambiguous:true});continue;}
+   throw new Error(`Cruce ambiguo en ${type}: ${key}.`);
+  }
+  catalog.set(key,value);added++;
  }if(source.source)d.references.set(type,{source:source.source,sha256:source.sha256||"",rows:catalog.size});return added;
 }
 export function operationalStores(d){return new Set(Object.values(FACT_FIELDS).flatMap(name=>d[name].map(f=>f.store)));}
