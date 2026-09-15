@@ -1,5 +1,14 @@
 # Historial consolidado
 
+## 6.4.0 · Proveedor y sesión recuperable
+
+- Añade a Pedido WOE un selector directo para `DIA`, `Maquila | Café Sirena` y `Lala | Comercializadora Lácteos`.
+- Separa por proveedor los productos, los PDF en tránsito y la exportación para evitar cruces accidentales.
+- Conserva en IndexedDB los Motores ya procesados y recupera la tienda después de actualizar o reabrir la página.
+- Muestra el estado de guardado en el encabezado y solicita almacenamiento persistente cuando el navegador lo permite.
+- Sustituye “Cambiar tienda” por un reinicio confirmado que borra únicamente los datos locales de Control Ops y recarga una sesión limpia.
+- Amplía la puerta verde con contratos de proveedor, persistencia, borrado y clonación estructurada.
+
 ## 6.3.0 · Pedido WOE directo e intuitivo
 
 - Fija la fecha de captura al día actual y elimina su edición manual.

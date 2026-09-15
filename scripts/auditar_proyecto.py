@@ -155,6 +155,9 @@ def audit_integration(root: Path = ROOT) -> dict[str, object]:
     management_contract = ("Resumen 360°", "Selecciona una herramienta", "Mismo CeCo, tipo y periodo", "loadParameters", "loadReader", "loadExporter", 'name="controlops-filters"', "data-multi-search", "closeMultiFilters")
     if not all(token in visible_surface for token in management_contract):
         raise AuditError("Menú operativo, filtros rápidos o carga diferida incompleta.")
+    session_contract = ("saveStatus", "Reiniciar datos", "resetConfirmation", "indexedDB.open", "writeWorkspaceSnapshot", "restoreWorkspaceSnapshot", "clearWorkspaceSnapshot", "navigator.storage.persist", "localStorage.removeItem('controlops-v5-settings')", "beforeunload", "location.reload()")
+    if not all(token in visible_surface for token in session_contract):
+        raise AuditError("La recuperación o el reinicio seguro de Motores está incompleto.")
     hidden_sections = ("Acerca de", "Seguridad", "Finanzas", "Alcance y calidad", "Fuentes cargadas", "function financeView()", "function scopeView()", "function sourcesView()")
     visible_extras = [token for token in hidden_sections if token in visible_surface]
     if visible_extras:
@@ -172,6 +175,8 @@ def audit_integration(root: Path = ROOT) -> dict[str, object]:
     return {
         "modulos_navegables": len(MODULES),
         "modulos_exportables": len(MODULES),
+        "sesion_local_recuperable": True,
+        "reinicio_local_confirmado": True,
         "pedido_woe": audit_woe_interface(root),
         "ensamble": audit_assembly_interface(root),
     }

@@ -11,6 +11,8 @@ Control Ops 360° opera con privacidad desde diseño: los Excel y PDF se leen de
 - Cruce de CeCo, SAP y DIA con bloqueo ante contradicciones.
 - Aislamiento por CeCo y selección determinística por tipo y periodo; toda omisión queda justificada.
 - Caché acotada por SHA-256 y carga diferida de componentes pesados.
+- Sesión recuperable en IndexedDB: conserva únicamente la representación procesada de los Motores dentro del mismo navegador y la reemplaza en una transacción local.
+- Reinicio confirmado: `Reiniciar datos` borra la sesión recuperable y los ajustes de Control Ops antes de recargar una pantalla limpia.
 - Exportación con validación de contenido, nombre seguro, límite de tamaño y marca confidencial.
 - ZIP determinista sin enlaces, rutas relativas inseguras, bases operativas ni archivos sensibles; cada archivo se verifica contra `ZIP_MANIFEST.sha256`.
 
@@ -21,7 +23,7 @@ Control Ops 360° opera con privacidad desde diseño: los Excel y PDF se leen de
 - Exportaciones generadas a partir de información operativa.
 - Tokens, credenciales, correos, rutas personales o llaves privadas.
 
-Los ajustes manuales pueden permanecer en el almacenamiento local del navegador por CeCo. En un equipo compartido, usa un perfil controlado y limpia los datos del sitio al terminar.
+Los Motores procesados, ajustes manuales y PDF de tránsito pueden permanecer en el almacenamiento local del navegador por CeCo. En un equipo compartido, usa un perfil controlado y pulsa `Reiniciar datos` al terminar. Esta acción no elimina los Excel o PDF originales del dispositivo.
 
 ## Reporte responsable
 

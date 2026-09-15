@@ -25,16 +25,21 @@ const expectedNegative=sources[2].auditTickets.filter(r=>r.total<0&&voidTicketKe
 const stores=new Set(sources.flatMap(s=>[...operationalStores(s)]));
 assert.equal(stores.size,1,'All three local motors must belong to one store.');
 const store=[...stores][0];
+const localSnapshot=structuredClone({schema:1,workbooks:sources.map((dataset,index)=>({name:files[index].name,fingerprint:`fixture-${index}`,dataset}))});
+const restored=seed();for(const workbook of localSnapshot.workbooks)mergeDataset(restored,workbook.dataset);
+assert.deepEqual([...operationalStores(restored)],[store]);
+assert.deepEqual([restored.salesFacts.length,restored.usageFacts.length,restored.auditVoids.length],[sources[0].salesFacts.length,sources[1].usageFacts.length,sources[2].auditVoids.length]);
+const recovery={workbooks:localSnapshot.workbooks.length,store,salesRows:restored.salesFacts.length,usageRows:restored.usageFacts.length,auditRows:restored.auditVoids.length};
 for(let mask=1;mask<8;mask++){
  const d=seed();sources.forEach((s,i)=>{if(mask&(1<<i))mergeDataset(d,s);});
  assert.deepEqual([...operationalStores(d)],[store]);
  const modules=availableModules(d).map(m=>m.id);const result={combination:mask,modules};
  if(mask&1){const p=peakHour(d,{store}),n=normalizados(d,{store});assert.equal(p.orders,expectedOrders);assert.equal(p.slots.length,48);assert.equal(p.slots.reduce((s,r)=>s+r.total,0),p.orders);assert.equal(Math.round(p.sales*100),expectedSalesCents);result.sales={rows:d.salesFacts.length,orders:p.orders,days:p.days,beverages:n.sizes,unknown:n.unknown.length};const report=reportFor('peak',p,{store});assert.ok(createExecutiveWorkbook(report).length>1000);assert.ok(createExecutivePdf(report).length>1000);const b=bakingForecast(d,{store},{},{date:new Date().toISOString().slice(0,10),slot:0});result.baking={days:b.days,products:b.items.length};}
- if(mask&2){const usage=inventory(d,{store,window:'all'});assert.equal(usage.days,new Set(sources[1].usageFacts.map(r=>r.dateKey)).size);assert.ok(usage.items.every(r=>r.totalUse>0));result.usage={items:usage.items.length,days:usage.days,blocked:usage.excluded};}
+ if(mask&2){const usage=inventory(d,{store,window:'all'});assert.equal(usage.days,new Set(sources[1].usageFacts.map(r=>r.dateKey)).size);assert.ok(usage.items.every(r=>r.totalUse>0));const providers=Object.fromEntries(['DIA','Maquila','LALA'].map(provider=>[provider,inventory(d,{store,window:'all',provider}).items.length]));assert.equal(Object.values(providers).reduce((total,count)=>total+count,0),usage.items.length);assert.ok(Object.values(providers).every(count=>count>0));result.usage={items:usage.items.length,days:usage.days,blocked:usage.excluded,providers};}
  if(mask&4){const a=auditStore(d,{store});assert.equal(d.auditVoids.length,sources[2].auditVoids.length);assert.equal(a.negativeCount,new Set(expectedNegative.map(r=>r.ticketKey)).size);assert.equal(Math.round(a.negativeAmount*100),Math.round(expectedNegative.reduce((s,r)=>s+Math.abs(r.total),0)*100));result.audit={voidRows:d.auditVoids.length,negativeOrders:a.negativeCount,voidTickets:a.voidCount};}
  if((mask&3)===3){const usage=inventory(d,{store,window:'all',normalizedCups:true}),cups=normalizados(d,{store}).cups;for(const item of usage.items.filter(r=>r.usageSource==='Normalizados'))assert.equal(item.totalUse,cups.find(c=>c.name===item.name)?.quantity);}
  // Same data, another download name: dates are replaced, not double counted.
  const before=JSON.stringify([d.salesFacts.length,d.usageFacts.length,d.auditVoids.length]);sources.forEach((s,i)=>{if(mask&(1<<i))mergeDataset(d,s);});assert.equal(JSON.stringify([d.salesFacts.length,d.usageFacts.length,d.auditVoids.length]),before);
  outputs.push(result);
 }
-console.log(JSON.stringify({passed:7,combinations:outputs},null,2));
+console.log(JSON.stringify({passed:7,recovery,combinations:outputs},null,2));

@@ -85,6 +85,23 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertIn("active&&date", order)
         for target in ("order-cycle", "order-transit", "order-count"):
             self.assertIn(f'data-order-jump="{target}"', order)
+    def test_order_filters_products_and_transit_by_provider(self):
+        order = self.ui.split("function orderView(){", 1)[1].split("function peakView(){", 1)[0]
+        operations = (ROOT / "assets/operations.mjs").read_text()
+        for label in ("DIA", "Maquila | Café Sirena", "Lala | Comercializadora Lácteos"):
+            self.assertIn(label, self.ui)
+        self.assertIn("providerAlias", operations)
+        self.assertIn("f.provider&&provider!==providerAlias(f.provider)", operations)
+        self.assertIn("filter(order=>providerAlias(order.providerAlias||order.provider)===provider)", order)
+        self.assertIn("PEDIDO POR PROVEEDOR", order)
+    def test_motor_session_is_recoverable_and_reset_is_explicit(self):
+        for element_id in ("saveStatus", "resetButton", "resetConfirmation", "cancelResetButton", "confirmResetButton"):
+            self.assertIn(element_id, self.parser.ids)
+        for token in ("indexedDB.open", "writeWorkspaceSnapshot", "restoreWorkspaceSnapshot", "clearWorkspaceSnapshot", "navigator.storage.persist", "localStorage.removeItem('controlops-v5-settings')", "beforeunload", "location.reload()"):
+            self.assertIn(token, self.ui)
+        self.assertIn("Reiniciar datos", self.html)
+        self.assertIn("Tus archivos Excel y PDF originales no se eliminan", self.html)
+        self.assertNotIn("document.cookie", self.ui)
     def test_normalizados_has_four_views_and_global_multi_filters(self):
         self.assertIn("tabs('normal',['Resumen','Vasos y tapas','FHW','Crema batida'])", self.ui)
         self.assertIn("multiFilter('weeks','Semanas'", self.ui)

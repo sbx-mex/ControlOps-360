@@ -2,6 +2,12 @@ import {normalize,numberValue,DAY_LABELS,DAY_MS,dateParts,dateExtent,weekKey,sho
 import {assemblyRecipe,projectedIngredients} from './assembly.mjs';
 
 export const ORDER_FACTOR={2:5,3:4,4:3,5:2};
+export function providerAlias(value){
+ const text=normalize(value);
+ if(text.includes('cafesirena')||text.includes('maquila'))return'Maquila';
+ if(text.includes('comercializadoradelacteos')||text.includes('lala'))return'LALA';
+ return'DIA';
+}
 export const MODULES=[
  {id:'maxmin',name:'Max & Min',caption:'Uso, mínimos y tarjetas',icon:'▦',type:'usage'},
  {id:'trend',name:'Tendencia de uso',caption:'Productos y días comparables',icon:'↗',type:'usage'},
@@ -86,11 +92,12 @@ export function inventory(d,f={},overrides={}){
  for(const item of items.values()){
   if(!(item.rawUse>0))continue;
   const byId=d.stockCatalog.get(item.id),stock=byId&&normalize(byId.name)===normalize(item.name)?byId:lookupName(d.stockCatalog,item.name);
-  const codeCheck=resolveInventoryCodes(d,item,d.woeCatalog.get(normalize(item.name))),woe=codeCheck.woe,p=presentation(item,stock,woe);
+  const codeCheck=resolveInventoryCodes(d,item,d.woeCatalog.get(normalize(item.name))),woe=codeCheck.woe,providerSource=woe?.provider||d.microsCatalog?.get(normalize(item.name))?.provider||'',provider=providerAlias(providerSource),p=presentation(item,stock,woe);
   const families=Array.isArray(f.families)?f.families.filter(Boolean):[];
+  if(f.provider&&provider!==providerAlias(f.provider))continue;
   if(f.family&&item.family!==f.family)continue;
   if(families.length&&!families.includes(item.family))continue;
-  const searchText=normalize([item.name,stock?.name,woe?.micros,woe?.description,woe?.sap,woe?.dia].filter(Boolean).join(' '));
+  const searchText=normalize([item.name,stock?.name,woe?.micros,woe?.description,woe?.sap,woe?.dia,providerSource,provider].filter(Boolean).join(' '));
   if(f.query&&!searchText.includes(normalize(f.query)))continue;
   const totalUse=item.rawUse*p.multiplier,average=days?totalUse/days:0,override=numberValue(overrides[item.key]);
   const minimum=override!==null&&override>=0?override:average,maximum=minimum*ORDER_FACTOR[orders];
@@ -110,7 +117,7 @@ export function inventory(d,f={},overrides={}){
   const weekday=DAY_LABELS.map((name,i)=>{const ds=daily.filter(r=>dateParts(r.date).weekday===i);return {name,days:ds.length,average:ds.length?sum(ds,'value')/ds.length:null};});
   const weeks=[...new Set(dates.map(weekKey))].sort().map(week=>{const ds=daily.filter(r=>weekKey(r.date)===week);return {week,days:ds.length,average:sum(ds,'value')/ds.length};});
   const a=weeks.at(-1),b=weeks.at(-2);
-  rows.push({...item,stock,woe,p,codeValidation:codeCheck.validation,sapName:woe?.description||stock?.name||item.name,microsName:woe?.micros||item.name,totalUse,average,minimum,maximum,orders,days,policy,compostable,daily,weekday,weeks,change:a&&b&&b.average>0?a.average/b.average-1:null,blocked:reasons.length>0,reason:reasons.join(' · '),adjusted:override!==null,unit:p.label});
+  rows.push({...item,stock,woe,provider,p,codeValidation:codeCheck.validation,sapName:woe?.description||stock?.name||item.name,microsName:woe?.micros||item.name,totalUse,average,minimum,maximum,orders,days,policy,compostable,daily,weekday,weeks,change:a&&b&&b.average>0?a.average/b.average-1:null,blocked:reasons.length>0,reason:reasons.join(' · '),adjusted:override!==null,unit:p.label});
  }
  if(f.normalizedCups&&d.salesFacts.length&&dates.length){
   const normalized=normalizados(d,{store:f.store,from:dates[0],to:dates.at(-1),week:f.week,weekday:f.weekday});
