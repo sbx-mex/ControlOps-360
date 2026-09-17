@@ -18,6 +18,14 @@ EXPORT_HEADERS = (
 META_LABELS = ("TIENDA", "PERIODO INI - FIN", "ACTUALIZACIÓN / IMPRESIÓN", "# PEDIDOS")
 
 
+def is_unit_format(value: object) -> bool:
+    """Accept legacy Unit exports and the current visible usage-unit label."""
+    label = str(value or "").strip()
+    return label == "Unidad" or (
+        label.startswith("Unidad · ") and bool(label.removeprefix("Unidad · ").strip())
+    )
+
+
 def table_rows(sheet, expected_headers: tuple[str, ...]) -> list[dict[str, object]]:
     values = list(sheet.iter_rows(values_only=True))
     if len(values) < 3 or tuple(values[2][:len(expected_headers)]) != expected_headers:
@@ -52,8 +60,8 @@ def validate(path: Path) -> dict[str, int]:
         maximum = float(row["Max"])
         if orders not in ORDER_FACTOR or abs(maximum - minimum * ORDER_FACTOR[orders]) > 0.31:
             raise ValueError(f"Uso Unidad: relación Max & Min inválida en {row['Descripción SAP']}")
-        if row["Unidad / Pick Pack"] != "Unidad":
-            raise ValueError("Uso Unidad: formato operativo inesperado")
+        if not is_unit_format(row["Unidad / Pick Pack"]):
+            raise ValueError("Uso Unidad: formato o unidad inválida")
         if row["Pz / Caja"] not in (None, ""):
             raise ValueError("Uso Unidad: no debe mostrar conversión de caja")
 

@@ -40,8 +40,8 @@ async function clearWorkspaceSnapshot(){
 function savedTime(value){if(!value)return'';try{return new Intl.DateTimeFormat('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(value));}catch{return'';}}
 function renderSaveStatus(){
  const element=$('saveStatus');if(!element)return;const visible=state.workbooks.length>0;element.hidden=!visible;if(!visible)return;
- const label=state.saveState==='saving'?'Guardando Motores…':state.saveState==='error'?'Sesión activa · sin respaldo':state.restored?`✓ Sesión recuperada · ${savedTime(state.savedAt)}`:`✓ Motores guardados · ${savedTime(state.savedAt)}`;
- element.className=`save-status ${state.saveState}`;element.textContent=label;element.title='Los Motores procesados se conservan sólo en este navegador para recuperarlos al actualizar.';
+ const label=state.saveState==='saving'?'Cargando…':state.saveState==='error'?'Sesión activa':state.restored?'✓ Carga verde · recuperada':'✓ Carga verde';
+ element.className=`save-status ${state.saveState}`;element.textContent=label;element.title=state.savedAt?`Respaldo local · ${savedTime(state.savedAt)}`:'Respaldo local activo.';
 }
 async function saveWorkspaceSnapshot(){
  if(!state.workbooks.length){await clearWorkspaceSnapshot();state.savedAt=0;state.saveState='idle';state.restored=false;renderSaveStatus();return true;}
@@ -287,12 +287,16 @@ function preflightFiles(input,kind){
  if(total>limits.total)throw new Error(`La carga supera el límite seguro de ${Math.round(limits.total/1024/1024)} MB.`);return unique;
 }
 async function inspectFiles(files){
- $('progressText').textContent='Preparando lector seguro…';const {inspectWorkbook}=await loadReader(),results=Array(files.length),memory=Number(globalThis.navigator?.deviceMemory)||8,limit=memory<=4?1:Math.min(2,files.length);let cursor=0;
- async function worker(){while(cursor<files.length){const index=cursor++,file=files[index];try{$('progressText').textContent=`Validando ${index+1}/${files.length} · ${file.name}…`;const incoming=await inspectWorkbook(file,msg=>$('progressText').textContent=`${index+1}/${files.length} · ${file.name} · ${msg}`);results[index]={file,incoming};}catch(error){results[index]={file,error};}}}
+ $('progressText').textContent='Cargando…';const {inspectWorkbook}=await loadReader(),results=Array(files.length),memory=Number(globalThis.navigator?.deviceMemory)||8,limit=memory<=4?1:Math.min(2,files.length);let cursor=0;
+ async function worker(){while(cursor<files.length){const index=cursor++,file=files[index];try{$('progressText').textContent=`${index+1}/${files.length} · ${file.name}`;const incoming=await inspectWorkbook(file,msg=>$('progressText').textContent=`${index+1}/${files.length} · ${msg}`);results[index]={file,incoming};}catch(error){results[index]={file,error};}}}
  await Promise.all(Array.from({length:limit},worker));return results;
 }
 function freshnessStatus(record){const value=workbookFreshness(record);return value.maxDate?`Vigente hasta ${shortDate(value.maxDate)} · ${value.days} días`:'Parámetro vigente';}
 function sourceRecord(file,record,statusCode,status,reason=''){const periodValue=record?workbookPeriod(record):null;return {id:record?.sourceId||`source-${++state.sourceSequence}`,name:file.name,fingerprint:record?.fingerprint||'',kind:record?workbookKind(record.dataset):'',ceco:record?workbookCeCo(record):'',period:periodValue?.from?shortPeriod(periodValue.from,periodValue.to):'Sin periodo',lastModified:Number(file.lastModified)||0,bytes:Number(file.size)||0,cached:!!record?.cached,readAt:new Date().toISOString(),statusCode,status,reason};}
+function loadResultContent({accepted,skipped,older,errors,warnings}){
+ const totals=[accepted.length&&`${accepted.length} listo${accepted.length===1?'':'s'}`,skipped.length&&`${skipped.length} repetido${skipped.length===1?'':'s'}`,older.length&&`${older.length} anterior${older.length===1?'':'es'}`].filter(Boolean),issues=[...errors,...warnings].slice(0,3),extra=errors.length+warnings.length-issues.length;
+ return `<section class="load-summary ${errors.length?'review':'ready'}"><strong>${errors.length?'Carga revisada':'Carga verde'}</strong><span>${totals.join(' · ')||'Sin cambios'}</span></section>`+(store()?`<p class="confirm-store">${esc(storeLabel())}</p>`:'')+(issues.length?`<div class="load-errors">${issues.map(message=>`<p>${esc(message)}</p>`).join('')}${extra>0?`<p>+${extra} detalle${extra===1?'':'s'}</p>`:''}</div>`:'');
+}
 async function loadFiles(files){
  if(state.loading||!files.length)return;try{files=preflightFiles(files,'workbooks');}catch(error){toast(error.message);return;}const started=performance.now(),bytes=sum(files,file=>file.size);state.loading=true;$('loading').hidden=false;$('uploadButton').disabled=true;
  const accepted=[],errors=[],warnings=[],skipped=[],older=[];let cacheHits=0;
@@ -307,13 +311,12 @@ async function loadFiles(files){
   for(const item of state.files){if(!item.id||!['validated','selected','superseded'].includes(item.statusCode))continue;const record=state.workbooks.find(candidate=>candidate.sourceId===item.id),decision=decisionByIgnored.get(item.id);if(record){item.statusCode='selected';item.status='Seleccionado';item.reason=freshnessStatus(record);}else if(decision){item.statusCode='superseded';item.status='Omitido';item.reason=`Reemplazado por ${decision.winner.name}. Mismo CeCo, tipo y periodo.`;}}
  }catch(error){errors.push(`Integración: ${error.message}`);}
  finally{state.lastLoad={durationMs:performance.now()-started,bytes,files:files.length,cacheHits,at:new Date().toISOString()};$('fileInput').value='';}
- if(state.workbooks.length){$('progressText').textContent='Protegiendo sesión local…';if(!await saveWorkspaceSnapshot())warnings.push('Los Motores están activos, pero este navegador no permitió conservarlos para una recarga.');}
- state.loading=false;$('loading').hidden=true;$('uploadButton').disabled=false;
+ try{if(state.workbooks.length){$('progressText').textContent='Protegiendo sesión local…';if(!await saveWorkspaceSnapshot())warnings.push('Sesión activa sin respaldo local.');}}
+ catch(error){console.error(error);warnings.push('Sesión activa sin respaldo local.');}
+ finally{state.loading=false;$('loading').hidden=true;$('uploadButton').disabled=false;$('fileInput').value='';}
  if(state.module!=='menu'&&!availableModules(state.dataset).some(module=>module.id===state.module))state.module='menu';
- draw();$('confirmationTitle').textContent=errors.length?'Revisa la carga':accepted.length?(store()?'Tienda lista':'Parámetros actualizados'):'Sin cambios';
- $('confirmation').querySelector('.confirm-icon').textContent=errors.length?'!':'✓';
- $('confirmationContent').innerHTML=(store()?`<p class="confirm-store">${esc(storeLabel())}</p><p>Compostable: <strong>${policyLabel()}</strong></p>`:'')+`<p>${accepted.length} incorporado${accepted.length===1?'':'s'}${skipped.length?` · ${skipped.length} duplicado${skipped.length===1?'':'s'} exacto${skipped.length===1?'':'s'} omitido${skipped.length===1?'':'s'}`:''}${older.length?` · ${older.length} versión${older.length===1?'':'es'} equivalente${older.length===1?'':'s'} omitida${older.length===1?'':'s'}`:''}</p>`+(state.saveState==='saved'?'<p class="session-confirm">✓ Sesión guardada para recuperarse al actualizar o volver a abrir.</p>':'')+(older.length?`<p>Sólo se reemplazaron archivos con el mismo CeCo, tipo y periodo.</p>`:'')+(errors.length?`<div class="load-errors">${errors.map(message=>`<p>${esc(message)}</p>`).join('')}</div>`:'')+(warnings.length?`<div class="load-warnings">${warnings.map(message=>`<p>${esc(message)}</p>`).join('')}</div>`:'');
- $('confirmation').showModal();
+ try{draw();$('confirmationTitle').textContent=errors.length?'Carga revisada':'Carga verde';$('confirmation').querySelector('.confirm-icon').textContent=errors.length?'!':'✓';$('confirmationContent').innerHTML=loadResultContent({accepted,skipped,older,errors,warnings});$('confirmation').showModal();}
+ catch(error){console.error(error);toast(errors.length?'Carga revisada.':'Carga verde.');}
 }
 async function exportFile(kind){if(!state.report||state.exporting)return;const report=state.report;if(state.module==='maxmin'&&!state.maxminSelected.size){toast('Elige al menos un producto para validar o imprimir.');return;}if(state.module==='order'&&!state.orderResults.some(x=>x.stock!==null&&x.stock>=0)){toast('Captura al menos una existencia antes de exportar la revisión.');return;}state.exporting=true;$('excelButton').disabled=true;$('pdfButton').disabled=true;try{const {createExecutiveWorkbook,createExecutivePdf,downloadBytes}=await loadExporter(),bytes=kind==='xlsx'?createExecutiveWorkbook(report):createExecutivePdf(report),maxminPdf=filterState().outputView==='list'?'Lista_Max_Min':'Etiquetas_Max_Min',suffix=state.module==='maxmin'?(kind==='pdf'?maxminPdf:'Validacion_Max_Min'):state.module==='order'?'Pedido_WOE':state.module==='assembly'?'Plan_Ensamble':state.module==='effort'?'Esfuerzo_Operativo':normalize(report.title),name=`${store()}_${suffix}_${state.result?.to||localToday()}.${kind}`;downloadBytes(bytes,name,kind==='xlsx'?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'application/pdf');toast(`${kind==='xlsx'?'Excel':'PDF'} generado correctamente.`);}catch(error){toast(error.message);}finally{state.exporting=false;draw();}}
 

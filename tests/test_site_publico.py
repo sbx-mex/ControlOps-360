@@ -147,6 +147,12 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertIn("Promise.all", self.ui)
         self.assertIn("Mismo CeCo, tipo y periodo", self.ui)
         self.assertIn("Compostable:", self.ui)
+
+    def test_safe_load_is_brief_and_always_recovers_interface(self):
+        for token in ("Carga verde", "loadResultContent", "Sesión activa sin respaldo local.", "finally{state.loading=false"):
+            self.assertIn(token, self.ui)
+        for token in ("<h2>Carga segura</h2>", "Carga Motores compatibles", "<strong>Cargar Excel</strong>"):
+            self.assertIn(token, self.html)
     def test_management_navigation_and_lazy_heavy_modules(self):
         for token in ("Resumen 360°", "function menuView()", "Selecciona una herramienta", "← Resumen"):
             self.assertIn(token, self.html + self.ui)
