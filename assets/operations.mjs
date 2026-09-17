@@ -195,14 +195,21 @@ export function calculateOrder(item,input={},settings={}){
  return {item,end,coverage,demand,stock,transit:transit||0,transits:transits||[],available,missing,suggested,quantity,blocked:reasons.length>0,reason:reasons.join(' · ')};
 }
 
+export function peakSalesFacts(facts=[]){
+ const rowsByTransaction=new Map();
+ for(const row of facts){const rows=rowsByTransaction.get(row.transactionKey)||[];rows.push(row);rowsByTransaction.set(row.transactionKey,rows);}
+ const noMostrarTransactions=new Set([...rowsByTransaction].filter(([,rows])=>rows.some(row=>row.noMostrar)).map(([key])=>key));
+ const visibleFacts=facts.filter(row=>!noMostrarTransactions.has(row.transactionKey));
+ return {visibleFacts,hiddenFacts:facts.filter(row=>noMostrarTransactions.has(row.transactionKey)),noMostrarTransactions};
+}
 export function peakHour(d,f={}){
- const facts=filterFacts(d.salesFacts,f),transactions=new Map();
+ const sourceFacts=filterFacts(d.salesFacts,f),cleaned=peakSalesFacts(sourceFacts),facts=cleaned.visibleFacts,transactions=new Map();
  for(const r of facts){const tx=transactions.get(r.transactionKey);if(!tx||r.ms<tx.ms)transactions.set(r.transactionKey,r);}
  const dates=new Map();for(const tx of transactions.values()){if(!dates.has(tx.dateKey))dates.set(tx.dateKey,Array(48).fill(0));dates.get(tx.dateKey)[tx.slot]++;}
  const days=[...dates.keys()],total=transactions.size;
  const slots=Array.from({length:48},(_,i)=>({slot:i,label:clock(i),total:sum([...dates.values()],r=>r[i]),average:days.length?sum([...dates.values()],r=>r[i])/days.length:null,weekday:DAY_LABELS.map((_,w)=>{const ds=days.filter(day=>dateParts(day).weekday===w);return ds.length?sum(ds,day=>dates.get(day)[i])/ds.length:null;})}));
  function peak(start,end,weekday=null){const ds=days.filter(day=>weekday===null||dateParts(day).weekday===weekday);let best=null;for(let i=start;i<=end-4;i++){const count=sum(ds,day=>sum(dates.get(day).slice(i,i+4),x=>x));if(count>0&&(!best||count>best.total))best={slot:i,label:`${clock(i)} - ${clock(i+4)}`,total:count,average:count/ds.length,days:ds.length};}return best?{...best,target:epsCeil(best.average+5),push:5}:null;}
- return {facts,orders:total,sales:sum(facts,'total'),days:days.length,slots,am:peak(0,24),pm:peak(24,48),weekday:DAY_LABELS.map((day,i)=>({day,days:days.filter(d=>dateParts(d).weekday===i).length,am:peak(0,24,i),pm:peak(24,48,i)})),...dateExtent(facts)};
+ return {facts,sourceFacts,hiddenFacts:cleaned.hiddenFacts,orders:total,sourceOrders:new Set(sourceFacts.map(row=>row.transactionKey)).size,noMostrarRows:cleaned.hiddenFacts.length,noMostrarTransactions:cleaned.noMostrarTransactions.size,visibleRows:facts.length,sales:sum(facts,'total'),days:days.length,slots,am:peak(0,24),pm:peak(24,48),weekday:DAY_LABELS.map((day,i)=>({day,days:days.filter(d=>dateParts(d).weekday===i).length,am:peak(0,24,i),pm:peak(24,48,i)})),...dateExtent(facts)};
 }
 
 // Size rules traced to Detalle_vaso Power Query, Reporte Normalizado_v2.
@@ -426,7 +433,18 @@ export function reportFor(module,result,context={}){
   if(transitOrders.length)sheet('Pedidos en tránsito',['Núm. pedido','Entrega','Proveedor','Archivo','Líneas'],transitOrders.map(order=>[order.purchaseOrder,order.deliveryDate,order.providerAlias||order.provider,order.sourceName,order.lines?.length||0]));
   const issues=[...(audit.conflicts||[]),...(audit.unmatched||[])];if(issues.length)sheet('Cruces por revisar',['Núm. pedido','Entrega','#DIA / Material','#SAP','Descripción PDF','Cantidad','Unidad','Motivo'],issues.map(issue=>[issue.order.purchaseOrder,issue.order.deliveryDate,issue.line.material,issue.line.sap,issue.line.description,issue.line.quantity,issue.line.unit,issue.reason]));
  }
- if(module==='peak'){report.summary=[['Órdenes',r.orders],['Días observados',r.days],['Peak AM',r.am?.label||'Sin demanda'],['Base AM',r.am?.average??null],['Objetivo AM',r.am?.target??null],['Peak PM',r.pm?.label||'Sin demanda'],['Base PM',r.pm?.average??null],['Objetivo PM',r.pm?.target??null]];sheet('Medias horas',['Franja','Órdenes totales','Promedio',...DAY_LABELS],r.slots.map(x=>[x.label,x.total,x.average,...x.weekday]));sheet('Días comparables',['Día','Días','Peak AM','Base AM','Objetivo AM','Peak PM','Base PM','Objetivo PM'],r.weekday.map(x=>[x.day,x.days,x.am?.label||'',x.am?.average??null,x.am?.target??null,x.pm?.label||'',x.pm?.average??null,x.pm?.target??null]));}
+ if(module==='peak'){
+  report.layout='peak-hour';report.operationalHeader=true;report.orders=r.orders;report.peak=r;
+  report.summary=[['Transacciones incluidas',r.orders],['Filas incluidas',r.visibleRows??r.facts.length],['Transacciones excluidas por No Mostrar',r.noMostrarTransactions??0],['Filas excluidas por No Mostrar',r.noMostrarRows??0],['Días observados',r.days],['Peak AM',r.am?.label||'Sin demanda'],['Objetivo AM',r.am?.target??null],['Peak PM',r.pm?.label||'Sin demanda'],['Objetivo PM',r.pm?.target??null]];
+  sheet('Resumen transacciones',['Indicador','Resultado','Criterio'],[
+   ['Filas analizadas',r.sourceFacts?.length??r.facts.length,'Formato detectado automáticamente'],
+   ['Filas incluidas',r.visibleRows??r.facts.length,'Ninguna fila marca Ordenes No Mostrar'],
+   ['Transacciones incluidas',r.orders,'Todas sus filas cumplen la regla'],
+   ['Transacciones excluidas',r.noMostrarTransactions??0,'Al menos una fila marca No Mostrar'],
+  ]);
+  sheet('Medias horas',['Franja','Órdenes totales','Promedio',...DAY_LABELS],r.slots.map(x=>[x.label,x.total,x.average,...x.weekday]));
+  sheet('Días comparables',['Día','Días','Peak AM','Base AM','Objetivo AM','Peak PM','Base PM','Objetivo PM'],r.weekday.map(x=>[x.day,x.days,x.am?.label||'',x.am?.average??null,x.am?.target??null,x.pm?.label||'',x.pm?.average??null,x.pm?.target??null]));
+ }
  if(module==='normal'){
   report.summary=[['FHW %',r.fhwRate==null?'—':`${(r.fhwRate*100).toFixed(1)}%`],['FHW emparejado',r.fhw],['Bebidas Starbucks Coffee',r.lobbyBeverages],['Cobertura del motor',r.ruleCoverage==null?'—':`${(r.ruleCoverage*100).toFixed(1)}%`]];
   if(context.subtab==='Crema batida')sheet('Crema batida',['Indicación registrada','Cantidad','Participación'],[['Con crema',r.cream.with,r.cream.with+r.cream.without?r.cream.with/(r.cream.with+r.cream.without):null],['Sin crema',r.cream.without,r.cream.with+r.cream.without?r.cream.without/(r.cream.with+r.cream.without):null]]);
