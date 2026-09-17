@@ -28,6 +28,16 @@ export function normalize(v){return String(v??"").replace(/_x[0-9a-f]{4}_/gi," "
 export function headerKey(v){const text=String(v??'').trim();return (text.startsWith('#')?'#':'')+normalize(text);}
 export function cleanId(v){return v==null?"":String(v).trim().replace(/\.0+$/,"");}
 export function numberValue(v){if(v==null||String(v).trim()==="")return null;const n=Number(String(v).trim().replace(/\s|\$/g,"").replace(",","."));return Number.isFinite(n)?n:null;}
+const NO_SHOW_MARKERS=new Set(["nomostrar","noincluir","excluir","ocultar"]);
+function noMostrarCell(value,header=""){
+ const valueKey=normalize(value),headerKey=normalize(header);
+ if(!valueKey)return false;
+ if(NO_SHOW_MARKERS.has(valueKey)||valueKey.includes("nomostrar"))return true;
+ if(/nomostrar|noincluir|excluir|ocultar/.test(headerKey))return !["0","no","false","n"].includes(valueKey);
+ if(/^(mostrar|incluir|visible|mostrarordenes)/.test(headerKey))return ["0","no","false","n","nomostrar","ocultar","excluir"].includes(valueKey);
+ return false;
+}
+export function rowHasNoMostrar(headers,row){return headers.some((header,index)=>noMostrarCell(row[index],header));}
 export function booleanValue(v){const k=normalize(v);return ["si","true","1","compostable"].includes(k)?true:["no","false","0","estandar"].includes(k)?false:null;}
 export function matchStructure(headers,type="sales"){const h=new Set(headers.map(headerKey)),required=STRUCTURES[type]||[],missing=required.filter(x=>!h.has(headerKey(x)));return {compatible:!!required.length&&!missing.length,missing,type};}
 export function classifyStructure(headers){const found=Object.keys(STRUCTURES).filter(k=>matchStructure(headers,k).compatible),h=new Set(headers.map(normalize));if(["ceco","cc","idtienda"].some(k=>h.has(k))&&h.has("compostable"))found.push("storePolicy");return found;}
@@ -49,7 +59,7 @@ export function shortDate(v){return v?`${v.slice(8,10)}/${v.slice(5,7)}`:"—";}
 export function shortPeriod(from,to){return from&&to?`${shortDate(from)} - ${shortDate(to)}${from.slice(0,4)!==to.slice(0,4)?` (${from.slice(0,4)}–${to.slice(0,4)})`:""}`:"Sin datos";}
 export function createDataset(){const d={sourceRows:0,duplicateRows:0,invalidRows:0,sourceTypes:new Set(),referenceTypes:new Set(),references:new Map(),indexes:{},sapDiaCatalog:new Map()};for(const [type,name]of Object.entries(FACT_FIELDS)){d[name]=[];d.indexes[type]=new Map();}for(const name of Object.values(CATALOG_FIELDS))d[name]=new Map();return d;}
 function rowGetter(headers){const m=new Map();headers.forEach((h,i)=>{const key=headerKey(h);if(!key||m.has(key))throw new Error("Encabezado vacío o duplicado: cruce ambiguo.");m.set(key,i);});return row=>(...keys)=>{for(const k of keys){const i=m.get(headerKey(k));if(i!=null&&row[i]!==undefined)return row[i];}return "";};}
-function insert(d,type,fact){const list=d[FACT_FIELDS[type]],i=d.indexes[type].get(fact.key);if(i!=null){d.duplicateRows++;for(const k of ["total","use","quantity","adjusted","amount","unit"]){if(list[i][k]!==fact[k])throw new Error(`Llave repetida con valores distintos en ${type}.`);}return false;}d.indexes[type].set(fact.key,list.length);list.push(fact);return true;}
+function insert(d,type,fact){const list=d[FACT_FIELDS[type]],i=d.indexes[type].get(fact.key);if(i!=null){d.duplicateRows++;for(const k of ["total","use","quantity","adjusted","amount","unit","noMostrar"]){if(list[i][k]!==fact[k])throw new Error(`Llave repetida con valores distintos en ${type}.`);}return false;}d.indexes[type].set(fact.key,list.length);list.push(fact);return true;}
 export function addRows(d,h,r,s={}){return {uniqueRows:addFacts(d,"sales",h,r,s)};}
 export function addUsageRows(d,h,r,s={}){return addFacts(d,"usage",h,r,s);}
 export function addAuditRows(d,t,h,r,s={}){return addFacts(d,t,h,r,s);}
@@ -59,7 +69,7 @@ function addFacts(d,type,headers,rows,source){
   if(!store||!date){d.invalidRows++;continue;}
   if(type==="usage"){Object.assign(fact,{item:cleanId(get("IDArticulo")),name:String(get("NombreArticulo")).trim(),use:numberValue(get("UsoIdeal")),unit:String(get("Unidad")).trim(),family:String(get("NombreClasificador")).trim()});if(!fact.item||!fact.name||fact.use==null){d.invalidRows++;continue;}fact.key=[store,date.dateKey,fact.item].join("|");}
   else{const secTrans=cleanId(get("SecTrans")),secDtl=cleanId(get("SecDtl")),id=cleanId(get("Id"));Object.assign(fact,{ticket,secTrans,secDtl,id,product:cleanId(get("IDProducto")),total:numberValue(get("Total")),employee:cleanId(get("IDEmpleado")),manager:cleanId(get("IdGerente"))});if(!ticket||fact.total==null){d.invalidRows++;continue;}fact.transactionKey=[store,date.dateKey,ticket,secTrans].join("|");fact.ticketKey=[store,date.dateKey,ticket].join("|");
-   if(type==="sales"){const quantity=numberValue(get("Cantidad")),adjusted=numberValue(get("CantidadAjustada"));if(!secTrans||!secDtl||!id||quantity==null||adjusted==null){d.invalidRows++;continue;}Object.assign(fact,{quantity,adjusted,priceLevel:numberValue(get("NivelPrecio")),mode:String(get("ModoOrdenDesc")||get("ModoOrden")||"Sin canal").trim(),negative:quantity<0||adjusted<0||fact.total<0});fact.key=[fact.transactionKey,secDtl,id,fact.product].join("|");}
+   if(type==="sales"){const quantity=numberValue(get("Cantidad")),adjusted=numberValue(get("CantidadAjustada"));if(!secTrans||!secDtl||!id||quantity==null||adjusted==null){d.invalidRows++;continue;}Object.assign(fact,{quantity,adjusted,priceLevel:numberValue(get("NivelPrecio")),mode:String(get("ModoOrdenDesc")||get("ModoOrden")||"Sin canal").trim(),negative:quantity<0||adjusted<0||fact.total<0,noMostrar:rowHasNoMostrar(headers,row)});fact.key=[fact.transactionKey,secDtl,id,fact.product].join("|");}
    else{Object.assign(fact,{amount:numberValue(get("MontoTotal"))??fact.total,status:String(get("Estatus")),reason:String(get("VoidReason","Reason")||"Sin motivo").trim(),payment:String(get("FormaPagDesc","Forma de Pago")||"Sin forma").trim(),partner:String(get("Partner")).trim(),position:String(get("Puesto_asignado","Puesto")).trim(),productName:String(get("Producto")).trim(),quantity:numberValue(get("Cantidad")),legacy:type==="auditLegacy"});fact.key=type==="auditLegacy"?[type,fact.ticketKey,normalize(fact.reason),fact.employee,normalize(fact.productName)].join("|"):[type,fact.ticketKey,secTrans,secDtl,id,type==="auditTicket"?"":cleanId(get(type==="auditVoid"?"IdVoid":"IdFormaPago")),fact.product].join("|");}
   }
   fact.fileName=source.fileName||"";if(insert(d,type,fact))added++;
