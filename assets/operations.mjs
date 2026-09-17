@@ -52,6 +52,12 @@ export function unitSpec(value){
  }
  return {dim,base,multiplier,label:multiplier>1?'Piezas':value||'Unidad sin definir',text,basePerUnit:base/multiplier};
 }
+export function usageUnitLabel(value){
+ const source=String(value??'').trim().replace(/\s+/g,' ');
+ if(!source)return'Sin unidad';
+ const detail=source.replace(/^[A-Z0-9]{2,6}\s*:\s*/i,'').trim();
+ return (detail||source.replace(/:\s*$/,'').trim())||'Sin unidad';
+}
 function lookupName(catalog,name){const key=normalize(name),matches=[...catalog.values()].filter(r=>normalize(r.name||r.micros)===key);return matches.length===1?matches[0]:null;}
 export function resolveInventoryCodes(d,item,baseWoe){
  const listReady=d.sapCatalog?.size>0,micros=d.microsCatalog?.get(normalize(item.name)),microsDia=micros&&!micros.ambiguous?micros.dia:'',sap=baseWoe?.sap||'',dia=baseWoe?.dia||microsDia;
@@ -117,8 +123,8 @@ export function inventory(d,f={},overrides={}){
   const weekday=DAY_LABELS.map((name,i)=>{const ds=daily.filter(r=>dateParts(r.date).weekday===i);return {name,days:ds.length,average:ds.length?sum(ds,'value')/ds.length:null};});
   const weeks=[...new Set(dates.map(weekKey))].sort().map(week=>{const ds=daily.filter(r=>weekKey(r.date)===week);return {week,days:ds.length,average:sum(ds,'value')/ds.length};});
   const a=weeks.at(-1),b=weeks.at(-2);
-  rows.push({...item,stock,woe,provider,p,codeValidation:codeCheck.validation,sapName:woe?.description||stock?.name||item.name,microsName:woe?.micros||item.name,totalUse,average,minimum,maximum,orders,days,policy,compostable,daily,weekday,weeks,change:a&&b&&b.average>0?a.average/b.average-1:null,blocked:reasons.length>0,reason:reasons.join(' · '),adjusted:override!==null,unit:p.label});
- }
+  rows.push({...item,stock,woe,provider,p,codeValidation:codeCheck.validation,sapName:woe?.description||stock?.name||item.name,microsName:woe?.micros||item.name,totalUse,average,minimum,maximum,orders,days,policy,compostable,daily,weekday,weeks,change:a&&b&&b.average>0?a.average/b.average-1:null,blocked:reasons.length>0,reason:reasons.join(' · '),adjusted:override!==null,usageUnit:item.unitConflict?'Unidades mezcladas':usageUnitLabel(item.unit),unit:p.label});
+}
  if(f.normalizedCups&&d.salesFacts.length&&dates.length){
   const normalized=normalizados(d,{store:f.store,from:dates[0],to:dates.at(-1),week:f.week,weekday:f.weekday});
   const byName=new Map(normalized.cups.filter(c=>c.ready&&c.comparable).map(c=>[normalize(c.name),c]));
@@ -195,21 +201,14 @@ export function calculateOrder(item,input={},settings={}){
  return {item,end,coverage,demand,stock,transit:transit||0,transits:transits||[],available,missing,suggested,quantity,blocked:reasons.length>0,reason:reasons.join(' · ')};
 }
 
-export function peakSalesFacts(facts=[]){
- const rowsByTransaction=new Map();
- for(const row of facts){const rows=rowsByTransaction.get(row.transactionKey)||[];rows.push(row);rowsByTransaction.set(row.transactionKey,rows);}
- const noMostrarTransactions=new Set([...rowsByTransaction].filter(([,rows])=>rows.some(row=>row.noMostrar)).map(([key])=>key));
- const visibleFacts=facts.filter(row=>!noMostrarTransactions.has(row.transactionKey));
- return {visibleFacts,hiddenFacts:facts.filter(row=>noMostrarTransactions.has(row.transactionKey)),noMostrarTransactions};
-}
 export function peakHour(d,f={}){
- const sourceFacts=filterFacts(d.salesFacts,f),cleaned=peakSalesFacts(sourceFacts),facts=cleaned.visibleFacts,transactions=new Map();
+ const facts=filterFacts(d.salesFacts,f),transactions=new Map();
  for(const r of facts){const tx=transactions.get(r.transactionKey);if(!tx||r.ms<tx.ms)transactions.set(r.transactionKey,r);}
  const dates=new Map();for(const tx of transactions.values()){if(!dates.has(tx.dateKey))dates.set(tx.dateKey,Array(48).fill(0));dates.get(tx.dateKey)[tx.slot]++;}
  const days=[...dates.keys()],total=transactions.size;
  const slots=Array.from({length:48},(_,i)=>({slot:i,label:clock(i),total:sum([...dates.values()],r=>r[i]),average:days.length?sum([...dates.values()],r=>r[i])/days.length:null,weekday:DAY_LABELS.map((_,w)=>{const ds=days.filter(day=>dateParts(day).weekday===w);return ds.length?sum(ds,day=>dates.get(day)[i])/ds.length:null;})}));
  function peak(start,end,weekday=null){const ds=days.filter(day=>weekday===null||dateParts(day).weekday===weekday);let best=null;for(let i=start;i<=end-4;i++){const count=sum(ds,day=>sum(dates.get(day).slice(i,i+4),x=>x));if(count>0&&(!best||count>best.total))best={slot:i,label:`${clock(i)} - ${clock(i+4)}`,total:count,average:count/ds.length,days:ds.length};}return best?{...best,target:epsCeil(best.average+5),push:5}:null;}
- return {facts,sourceFacts,hiddenFacts:cleaned.hiddenFacts,orders:total,sourceOrders:new Set(sourceFacts.map(row=>row.transactionKey)).size,noMostrarRows:cleaned.hiddenFacts.length,noMostrarTransactions:cleaned.noMostrarTransactions.size,visibleRows:facts.length,sales:sum(facts,'total'),days:days.length,slots,am:peak(0,24),pm:peak(24,48),weekday:DAY_LABELS.map((day,i)=>({day,days:days.filter(d=>dateParts(d).weekday===i).length,am:peak(0,24,i),pm:peak(24,48,i)})),...dateExtent(facts)};
+ return {facts,orders:total,sales:sum(facts,'total'),days:days.length,slots,am:peak(0,24),pm:peak(24,48),weekday:DAY_LABELS.map((day,i)=>({day,days:days.filter(d=>dateParts(d).weekday===i).length,am:peak(0,24,i),pm:peak(24,48,i)})),...dateExtent(facts)};
 }
 
 // Size rules traced to Detalle_vaso Power Query, Reporte Normalizado_v2.
@@ -406,10 +405,10 @@ export function reportFor(module,result,context={}){
  if(module==='maxmin'){
   const selected=new Set(context.selectedKeys||[]),items=selected.size?r.items.filter(i=>selected.has(i.key)):[],priority=new Map(r.items.map((i,index)=>[i.key,index+1]));
   report.layout=context.outputView==='list'?'maxmin-list':'labels';report.hideSummary=true;report.operationalHeader=true;report.orders=r.orders;report.summary=[['Productos seleccionados',items.length],['Días observados',r.days],['Pedidos por semana',r.orders]];
-  const cards=items.map(i=>{const mode=context.modes?.[i.key]||context.mode||'unit',c=minmaxValues(i,mode),piecesPerCase=mode==='sleeve'?sleeveFor(i)?.size:(i.p.stockPack||i.p.woePack);return {...c,name:i.sapName,sapName:i.sapName,microsName:i.microsName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',daily:i.minimum,mode,orders:r.orders,priority:priority.get(i.key),piecesPerCase,adjusted:i.adjusted};});
+  const cards=items.map(i=>{const mode=context.modes?.[i.key]||context.mode||'unit',c=minmaxValues(i,mode),piecesPerCase=mode==='sleeve'?sleeveFor(i)?.size:(i.p.stockPack||i.p.woePack);return {...c,name:i.sapName,sapName:i.sapName,microsName:i.microsName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',daily:i.minimum,usageUnit:i.usageUnit||i.unit||'Sin unidad',mode,orders:r.orders,priority:priority.get(i.key),piecesPerCase,adjusted:i.adjusted};});
   if(report.layout==='labels')report.cards=cards;
   else report.listCards=cards.map((card,index)=>({...card,priority:priority.get(items[index].key),family:items[index].family}));
-  report.sheets.push({name:'Uso Unidad',headers:['Descripción SAP','Nombre Micros','#DIA','#SAP','Min','Max','Unidad / Pick Pack','Pz / Caja','# Pedido'],rows:items.map(i=>[i.sapName,i.microsName,i.woe?.dia||'',i.woe?.sap||'',Number(i.minimum.toFixed(1)),Number(i.maximum.toFixed(1)),'Unidad','',r.orders]),formats:[null,null,null,null,'oneDecimal','oneDecimal',null,null,'integer'],widths:[38,32,14,14,12,12,22,14,13]});
+  report.sheets.push({name:'Uso Unidad',headers:['Descripción SAP','Nombre Micros','#DIA','#SAP','Min','Max','Unidad / Pick Pack','Pz / Caja','# Pedido'],rows:items.map(i=>[i.sapName,i.microsName,i.woe?.dia||'',i.woe?.sap||'',Number(i.minimum.toFixed(1)),Number(i.maximum.toFixed(1)),`Unidad · ${i.usageUnit||i.unit||'Sin unidad'}`,'',r.orders]),formats:[null,null,null,null,'oneDecimal','oneDecimal',null,null,'integer'],widths:[38,32,14,14,12,12,22,14,13]});
   const packRows=[];
   for(const i of items){
    const base={name:i.sapName,micros:i.microsName,sap:i.woe?.sap||'',dia:i.woe?.dia||'',orders:r.orders},pack=minmaxValues(i,'pack'),candidates=[{format:'Pick Pack',values:pack}];
@@ -433,18 +432,7 @@ export function reportFor(module,result,context={}){
   if(transitOrders.length)sheet('Pedidos en tránsito',['Núm. pedido','Entrega','Proveedor','Archivo','Líneas'],transitOrders.map(order=>[order.purchaseOrder,order.deliveryDate,order.providerAlias||order.provider,order.sourceName,order.lines?.length||0]));
   const issues=[...(audit.conflicts||[]),...(audit.unmatched||[])];if(issues.length)sheet('Cruces por revisar',['Núm. pedido','Entrega','#DIA / Material','#SAP','Descripción PDF','Cantidad','Unidad','Motivo'],issues.map(issue=>[issue.order.purchaseOrder,issue.order.deliveryDate,issue.line.material,issue.line.sap,issue.line.description,issue.line.quantity,issue.line.unit,issue.reason]));
  }
- if(module==='peak'){
-  report.layout='peak-hour';report.operationalHeader=true;report.orders=r.orders;report.peak=r;
-  report.summary=[['Transacciones incluidas',r.orders],['Filas incluidas',r.visibleRows??r.facts.length],['Transacciones excluidas por No Mostrar',r.noMostrarTransactions??0],['Filas excluidas por No Mostrar',r.noMostrarRows??0],['Días observados',r.days],['Peak AM',r.am?.label||'Sin demanda'],['Objetivo AM',r.am?.target??null],['Peak PM',r.pm?.label||'Sin demanda'],['Objetivo PM',r.pm?.target??null]];
-  sheet('Resumen transacciones',['Indicador','Resultado','Criterio'],[
-   ['Filas analizadas',r.sourceFacts?.length??r.facts.length,'Formato detectado automáticamente'],
-   ['Filas incluidas',r.visibleRows??r.facts.length,'Ninguna fila marca Ordenes No Mostrar'],
-   ['Transacciones incluidas',r.orders,'Todas sus filas cumplen la regla'],
-   ['Transacciones excluidas',r.noMostrarTransactions??0,'Al menos una fila marca No Mostrar'],
-  ]);
-  sheet('Medias horas',['Franja','Órdenes totales','Promedio',...DAY_LABELS],r.slots.map(x=>[x.label,x.total,x.average,...x.weekday]));
-  sheet('Días comparables',['Día','Días','Peak AM','Base AM','Objetivo AM','Peak PM','Base PM','Objetivo PM'],r.weekday.map(x=>[x.day,x.days,x.am?.label||'',x.am?.average??null,x.am?.target??null,x.pm?.label||'',x.pm?.average??null,x.pm?.target??null]));
- }
+ if(module==='peak'){report.summary=[['Órdenes',r.orders],['Días observados',r.days],['Peak AM',r.am?.label||'Sin demanda'],['Base AM',r.am?.average??null],['Objetivo AM',r.am?.target??null],['Peak PM',r.pm?.label||'Sin demanda'],['Base PM',r.pm?.average??null],['Objetivo PM',r.pm?.target??null]];sheet('Medias horas',['Franja','Órdenes totales','Promedio',...DAY_LABELS],r.slots.map(x=>[x.label,x.total,x.average,...x.weekday]));sheet('Días comparables',['Día','Días','Peak AM','Base AM','Objetivo AM','Peak PM','Base PM','Objetivo PM'],r.weekday.map(x=>[x.day,x.days,x.am?.label||'',x.am?.average??null,x.am?.target??null,x.pm?.label||'',x.pm?.average??null,x.pm?.target??null]));}
  if(module==='normal'){
   report.summary=[['FHW %',r.fhwRate==null?'—':`${(r.fhwRate*100).toFixed(1)}%`],['FHW emparejado',r.fhw],['Bebidas Starbucks Coffee',r.lobbyBeverages],['Cobertura del motor',r.ruleCoverage==null?'—':`${(r.ruleCoverage*100).toFixed(1)}%`]];
   if(context.subtab==='Crema batida')sheet('Crema batida',['Indicación registrada','Cantidad','Participación'],[['Con crema',r.cream.with,r.cream.with+r.cream.without?r.cream.with/(r.cream.with+r.cream.without):null],['Sin crema',r.cream.without,r.cream.with+r.cream.without?r.cream.without/(r.cream.with+r.cream.without):null]]);

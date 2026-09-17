@@ -166,6 +166,10 @@ function clipped(value,width,size=9){
  const source=String(value??''),limit=Math.max(3,Math.floor(width/(size*.54)));
  return source.length<=limit?source:source.slice(0,Math.max(1,limit-1)).trimEnd()+'…';
 }
+function roundedRectPath(x,y,width,height,radius=8){
+ const r=Math.min(radius,width/2,height/2),k=r*.55228475;
+ return `${x+r} ${y} m ${x+width-r} ${y} l ${x+width-r+k} ${y} ${x+width} ${y+r-k} ${x+width} ${y+r} c ${x+width} ${y+height-r} l ${x+width} ${y+height-r+k} ${x+width-r+k} ${y+height} ${x+width-r} ${y+height} c ${x+r} ${y+height} l ${x+r-k} ${y+height} ${x} ${y+height-r+k} ${x} ${y+height-r} c ${x} ${y+r} l ${x} ${y+r-k} ${x+r-k} ${y} ${x+r} ${y} h`;
+}
 function pdfFromPages(pages){
  const objects=["<< /Type /Catalog /Pages 2 0 R >>","", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>","<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"],kids=[];
  pages.forEach((source,i)=>{let stream=source+`\nBT /F2 5.3 Tf 0.25 0.38 0.31 rg 18 14 Td (${pdfEscape('CONFIDENCIAL · USO OPERATIVO INTERNO')}) Tj ET\nBT /F1 6 Tf 0.3 0.4 0.3 rg 365 14 Td (Hoja ${i+1} de ${pages.length}) Tj ET\nBT /F1 5.1 Tf 0.3 0.4 0.3 rg 500 14 Td (${pdfEscape('Diseñador por Jorge Alcantar Aguiar & Enrique César Flores')}) Tj ET`;const pageId=objects.length+1,contentId=pageId+1;kids.push(pageId+" 0 R");objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 792 612] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`);objects.push(`<< /Length ${encoder.encode(stream).length} >>\nstream\n${stream}\nendstream`);});
@@ -185,7 +189,7 @@ function createLabelPdf(report){
  for(let start=0;start<report.cards.length;start+=perPage){const commands=[],pageCards=report.cards.slice(start,start+perPage),text=(x,y,size,value,bold=false,align='left',tone='dark')=>{const at=align==='center'?x-String(value??'').length*size*.27:x,color=tone==='green'?'0 0.38 0.25':'0.06 0.12 0.10';commands.push(`BT /F${bold?2:1} ${size} Tf ${color} rg ${at} ${y} Td (${pdfEscape(value)}) Tj ET`);};
   drawOperationalHeader(commands,text,report);
   pageCards.forEach((card,index)=>{const row=Math.floor(index/columns),col=index%columns,x=margin+col*(cardW+gapX),top=gridTop-row*(cardH+gapY),bottom=top-cardH,topHeight=49,footerHeight=18,bodyTop=top-topHeight,bodyBottom=bottom+footerHeight;
-   commands.push(`0.08 0.12 0.10 RG 0.85 w ${x} ${bottom} ${cardW} ${cardH} re S`,`0 0.38 0.25 RG 1.2 w ${x} ${top-1} m ${x+cardW} ${top-1} l S`);
+   commands.push(`0.98 0.995 0.985 rg ${roundedRectPath(x,bottom,cardW,cardH,8)} f`,`0.08 0.12 0.10 RG 0.85 w ${roundedRectPath(x,bottom,cardW,cardH,8)} S`,`0 0.38 0.25 RG 1.2 w ${x+8} ${top-1} m ${x+cardW-8} ${top-1} l S`);
    const titleLines=wrap(card.sapName||card.name,cardW-16,8.1).slice(0,2);
    titleLines.forEach((line,lineIndex)=>text(x+8,top-14-lineIndex*9.5,8.1,line,true));
    const identity=`${card.microsName||'—'} | #DIA ${card.dia||'—'} | #SAP ${card.sap||'—'}${card.adjusted?' | AJUSTADO':''}`;
@@ -195,8 +199,8 @@ function createLabelPdf(report){
    text(x+cardW*.25,bodyBottom+14,17,card.minimum==null?'—':NUMBER.format(card.minimum),true,'center');text(x+cardW*.75,bodyBottom+14,17,card.maximum==null?'—':NUMBER.format(card.maximum),true,'center');
    const mode=card.mode==='pack'?'PICK PACK':card.mode==='sleeve'?'MANGA':'UNIDAD';
    if(card.mode==='unit'){
-    const split=cardW*.66;commands.push(`0.75 0.82 0.78 RG 0.35 w ${x+split} ${bottom} m ${x+split} ${bodyBottom} l S`);
-    text(x+split/2,bottom+6,5.8,mode,true,'center','green');text(x+split+(cardW-split)/2,bottom+6,5.8,`${card.orders??'—'} PEDIDOS / SEM`,true,'center');
+    const split=cardW*.66,unitText=`UNIDAD · ${card.usageUnit||card.unit||'Sin unidad'}`;commands.push(`0.75 0.82 0.78 RG 0.35 w ${x+split} ${bottom} m ${x+split} ${bodyBottom} l S`);
+    text(x+split/2,bottom+6,5.8,clipped(unitText,split-12,5.8),true,'center','green');text(x+split+(cardW-split)/2,bottom+6,5.8,`${card.orders??'—'} PEDIDOS / SEM`,true,'center');
    }else{
     const third=cardW/3,pieces=`${NUMBER.format(card.piecesPerCase)} PZ / CAJA`;commands.push(`0.75 0.82 0.78 RG 0.35 w ${x+third} ${bottom} m ${x+third} ${bodyBottom} l S ${x+third*2} ${bottom} m ${x+third*2} ${bodyBottom} l S`);
     text(x+third*.5,bottom+6,5.8,mode,true,'center','green');text(x+third*1.5,bottom+6,5.8,clipped(pieces,third-8,5.8),false,'center');text(x+third*2.5,bottom+6,5.8,`${card.orders??'—'} PEDIDOS / SEM`,true,'center');
@@ -211,7 +215,7 @@ function createMaxMinListPdf(report){
  for(let start=0;start<report.listCards.length;start+=perPage){const commands=[],text=(x,y,size,value,bold=false,align='left',tone='dark')=>{const at=align==='center'?x-String(value??'').length*size*.27:x,color=tone==='white'?'1 1 1':tone==='green'?'0 0.38 0.25':'0.06 0.12 0.10';commands.push(`BT /F${bold?2:1} ${size} Tf ${color} rg ${at} ${y} Td (${pdfEscape(value)}) Tj ET`);};
   drawOperationalHeader(commands,text,report);text(28,551,11,'MAX & MIN · LISTA OPERATIVA',true);
   commands.push('0 0.38 0.25 rg 28 522 736 23 re f');let headerX=28;labels.forEach((label,index)=>{text(headerX+4,530,index>5?5.2:5.8,label,true,'left','white');headerX+=widths[index];});
-  report.listCards.slice(start,start+perPage).forEach((card,index)=>{const y=507-index*31,format=card.mode==='pack'?'Pick Pack':card.mode==='sleeve'?'Manga':'Unidad',values=[card.sapName||card.name,card.microsName||'—',card.dia||'—',card.sap||'—',card.minimum==null?'—':NUMBER.format(card.minimum),card.maximum==null?'—':NUMBER.format(card.maximum),format,card.piecesPerCase?NUMBER.format(card.piecesPerCase):'—',card.orders??'—'];let cellX=28;
+  report.listCards.slice(start,start+perPage).forEach((card,index)=>{const y=507-index*31,format=card.mode==='pack'?'Pick Pack':card.mode==='sleeve'?'Manga':`Unidad · ${card.usageUnit||card.unit||'Sin unidad'}`,values=[card.sapName||card.name,card.microsName||'—',card.dia||'—',card.sap||'—',card.minimum==null?'—':NUMBER.format(card.minimum),card.maximum==null?'—':NUMBER.format(card.maximum),format,card.piecesPerCase?NUMBER.format(card.piecesPerCase):'—',card.orders??'—'];let cellX=28;
    if(index%2)commands.push(`0.97 0.98 0.97 rg 28 ${y-12} 736 30 re f`);
    values.forEach((value,columnIndex)=>{const cellWidth=widths[columnIndex],center=columnIndex>=2;text(center?cellX+cellWidth/2:cellX+4,y,6.1,clipped(value,cellWidth-8,6.1),columnIndex===0||columnIndex>=4,center?'center':'left');if(columnIndex)commands.push(`0.88 0.91 0.89 RG 0.25 w ${cellX} ${y-12} m ${cellX} ${y+18} l S`);cellX+=cellWidth;});commands.push(`0.86 0.90 0.87 RG 0.3 w 28 ${y-12} m 764 ${y-12} l S`);});
   pages.push(commands.join('\n'));
@@ -248,40 +252,12 @@ function createAssemblyPdf(report){
   group.forEach((product,index)=>{const column=index%2,row=Math.floor(index/2),x=28+column*372,top=510-row*151,width=360,height=139;commands.push(`0.79 0.86 0.81 RG 0.7 w ${x} ${top-height} ${width} ${height} re S`,`0.93 0.96 0.93 rg ${x} ${top-39} ${width} 39 re f`);text(x+12,top-17,8.5,clipped(product.name,width-98,8.5),true);text(x+width-48,top-19,16,NUMBER.format(product.plan),true,'center','green');text(x+width-48,top-31,5.3,'PZAS PLAN',true,'center');const recipe=product.recipe?.rule||'Receta pendiente de validar';wrap(recipe,width-24,6.2).slice(0,3).forEach((line,lineIndex)=>text(x+12,top-56-lineIndex*9,6.2,line));const totals=product.recipe?.packaged?'Sin porcionado en tienda':product.ingredients.map(ingredient=>`${ingredient.name}: ${NUMBER.format(ingredient.totalUnits)} ${ingredient.unit} / ${NUMBER.format(ingredient.totalGrams)} g`).join(' · ');wrap(totals,width-24,6).slice(0,3).forEach((line,lineIndex)=>text(x+12,top-91-lineIndex*9,6,line,true));text(x+12,top-127,5.4,clipped(`Origen: ${product.sources.join(', ')}`,width-24,5.4));});pages.push(commands.join('\n'));}
  return pdfFromPages(pages);
 }
-function createPeakPdf(report){
- const r=report.peak||{},pages=[],tableX=28,tableWidth=736;
- const number=value=>value==null?'—':NUMBER.format(value);
- const textFor=(commands)=>(x,y,size,value,bold=false,align='left',tone='dark')=>{const rendered=String(value??''),at=align==='center'?x-rendered.length*size*.27:x,color=tone==='white'?'1 1 1':tone==='gold'?'0.95 0.82 0.42':tone==='green'?'0 0.38 0.25':'0.06 0.12 0.10';commands.push(`BT /F${bold?2:1} ${size} Tf ${color} rg ${at} ${y} Td (${pdfEscape(rendered)}) Tj ET`);};
- const drawTable=(commands,headers,rows,options={})=>{
-  const text=textFor(commands),widths=options.widths||Array(headers.length).fill(tableWidth/headers.length),headerY=options.y||510,headerHeight=options.headerHeight||27,rowHeight=options.rowHeight||24,maxValue=options.maxValue||1;
-  commands.push(`0 0.38 0.25 rg ${tableX} ${headerY-headerHeight} ${tableWidth} ${headerHeight} re f`);let x=tableX;
-  headers.forEach((header,index)=>{text(x+widths[index]/2,headerY-17,options.headerSize||6.2,header,true,'center','white');x+=widths[index];});
-  rows.forEach((row,rowIndex)=>{const top=headerY-headerHeight-rowIndex*rowHeight,bottom=top-rowHeight;if(rowIndex%2)commands.push(`0.97 0.985 0.97 rg ${tableX} ${bottom} ${tableWidth} ${rowHeight} re f`);let cellX=tableX;row.forEach((value,columnIndex)=>{const cellWidth=widths[columnIndex],numeric=typeof value==='number'||options.numericColumns?.includes(columnIndex),display=typeof value==='number'?number(value):String(value??'—'),fill=options.heat&&numeric&&value!=null?Math.min(4,Math.max(1,Math.ceil((Number(value)||0)/maxValue*4))):0;if(fill){const fills=['','0.91 0.96 0.92','0.80 0.91 0.84','0.58 0.78 0.68','0.24 0.56 0.43'];commands.push(`${fills[fill]} rg ${cellX+3} ${bottom+3} ${Math.max(0,cellWidth-6)} ${Math.max(0,rowHeight-6)} re f`);}text(numeric?cellX+cellWidth/2:cellX+5,top-16,options.size||6.5,clipped(display,cellWidth-10,options.size||6.5),numeric,numeric?'center':'left',fill>=4?'white':'dark');cellX+=cellWidth;});commands.push(`0.85 0.90 0.86 RG 0.3 w ${tableX} ${bottom} m ${tableX+tableWidth} ${bottom} l S`);});
- };
- const headerPage=(commands,title,subtitle='')=>{const text=textFor(commands);drawOperationalHeader(commands,text,report);text(28,550,13,title,true);if(subtitle)text(28,536,7,subtitle);};
- {
-  const commands=[],text=textFor(commands);headerPage(commands,'PEAK HOUR - RESUMEN VISUAL',report.filters||'Todas las semanas - Todos los dias');
-  commands.push('0 0.38 0.25 rg 28 438 736 78 re f');text(48,491,8,'TRANSACCIONES VALIDAS',true,'left','gold');text(48,456,30,number(r.orders),true,'left','white');text(230,474,12,'Cumplen la limpieza dinamica',true,'left','white');text(230,456,8,'Ninguna fila de la transaccion marca No Mostrar',false,'left','white');
-  const stats=[['Filas analizadas',r.sourceFacts?.length??r.facts?.length??0],['Filas incluidas',r.visibleRows??r.facts?.length??0],['Trans. excluidas',r.noMostrarTransactions??0],['Filas excluidas',r.noMostrarRows??0]];stats.forEach(([label,value],index)=>{const x=28+index*184;commands.push(`0.94 0.97 0.94 rg ${x} 344 174 70 re f`,`0.77 0.86 0.80 RG 0.5 w ${x} 344 174 70 re S`);text(x+12,394,7,label,true);text(x+12,365,20,number(value),true,'left',index>1?'gold':'green');});
-  commands.push('0.98 0.97 0.89 rg 28 276 736 48 re f','0.80 0.69 0.40 RG 0.7 w 28 276 736 48 re S');text(42,306,7.2,'REGLA DE LIMPIEZA',true,'left','gold');text(42,289,8,'El campo se detecta segun el formato Excel. Si cualquier fila contiene No Mostrar, se excluye la transaccion completa.',false);
-  const goals=[['OBJETIVO AM','00:00 - 12:00',r.am],['OBJETIVO PM','12:00 - 24:00',r.pm]];goals.forEach(([label,period,point],index)=>{const x=28+index*372;commands.push(`0.98 0.99 0.98 rg ${x} 140 352 116 re f`,`0.78 0.86 0.80 RG 0.7 w ${x} 140 352 116 re S`,`0.80 0.69 0.40 RG 2.4 w ${x} 254 m ${x+352} 254 l S`);text(x+14,237,7.2,label,true,'left','green');text(x+338,237,7,period,false,'right');text(x+14,203,26,point?number(point.target):'—',true,'left','green');text(x+14,184,7,point?`Base ${number(point.average)} +${number(point.push)} objetivo`:'Sin demanda comparable',false);text(x+14,164,7,point?.label||'Sin bloque disponible',true);});
-  text(28,108,7,'Lectura: Peak Hour usa el bloque consecutivo de cuatro medias horas con mayor demanda visible.',false,'left','green');pages.push(commands.join('\n'));
- }
- {
-  const commands=[],text=textFor(commands);headerPage(commands,'PEAK HOUR - TRAZABILIDAD','Resumen de transacciones y objetivos por dia comparable');
-  const summaryRows=[['Filas analizadas',r.sourceFacts?.length??r.facts?.length??0,'Formato detectado automaticamente'],['Filas incluidas',r.visibleRows??r.facts?.length??0,'Sin marca Ordenes No Mostrar'],['Transacciones incluidas',r.orders??0,'Todas sus filas cumplen la regla'],['Transacciones excluidas',r.noMostrarTransactions??0,'Al menos una fila marca No Mostrar']];
-  drawTable(commands,['Indicador','Resultado','Criterio'],summaryRows,{widths:[190,90,456],y:510,rowHeight:27,size:7.2,numericColumns:[1]});text(28,337,11,'OBJETIVO POR DIA COMPARABLE',true);const weekdayRows=(r.weekday||[]).map(x=>[x.day,x.days,x.am?.label||'—',x.am?.average??null,x.am?.target??null,x.pm?.label||'—',x.pm?.average??null,x.pm?.target??null]);drawTable(commands,['Dia','Dias','Peak AM','Base AM','Objetivo AM','Peak PM','Base PM','Objetivo PM'],weekdayRows,{widths:[62,48,105,76,82,105,76,82],y:318,headerHeight:32,rowHeight:25,size:5.8,numericColumns:[1,3,4,6,7]});pages.push(commands.join('\n'));
- }
- const slots=r.slots||[];for(let start=0;start<slots.length;start+=24){const commands=[],text=textFor(commands);headerPage(commands,'PEAK HOUR - MEDIAS HORAS',`${report.filters||'Todas las semanas - Todos los dias'} · ${start+1}-${Math.min(start+24,slots.length)} de ${slots.length}`);const rows=slots.slice(start,start+24).map(slot=>[slot.label, ...slot.weekday, slot.average]);drawTable(commands,['Franja','Lun','Mar','Mie','Jue','Vie','Sab','Dom','Promedio'],rows,{widths:[80,82,82,82,82,82,82,82,82],y:510,headerHeight:28,rowHeight:18,size:6.1,numericColumns:[1,2,3,4,5,6,7,8],heat:true,maxValue:Math.max(1,...slots.flatMap(slot=>slot.weekday.map(value=>value||0)))});pages.push(commands.join('\n'));}
- return pdfFromPages(pages);
-}
 export function createExecutivePdf(report) {
  if(!report?.sheets?.length)throw new Error("Este menú no tiene datos exportables.");
  if(report.layout==='labels')return createLabelPdf(report);
  if(report.layout==='maxmin-list')return createMaxMinListPdf(report);
  if(report.layout==='order-woe')return createOrderWoePdf(report);
  if(report.layout==='assembly-plan')return createAssemblyPdf(report);
- if(report.layout==='peak-hour')return createPeakPdf(report);
  const pages=[];let commands=[],y=0;
  const text=(x,y,size,value,bold=false)=>commands.push(`BT /F${bold?2:1} ${size} Tf 0.06 0.16 0.13 rg ${x} ${y} Td (${pdfEscape(value)}) Tj ET`);
  const newPage=()=>{if(commands.length)pages.push(commands.join("\n"));commands=[];if(report.operationalHeader){const headerText=(x,at,size,value,bold=false,align='left',tone='dark')=>{const px=align==='center'?x-String(value??'').length*size*.27:x,color=tone==='green'?'0 0.38 0.25':'0.06 0.12 0.10';commands.push(`BT /F${bold?2:1} ${size} Tf ${color} rg ${px} ${at} Td (${pdfEscape(value)}) Tj ET`);};drawOperationalHeader(commands,headerText,report);text(28,550,13,report.title,true);if(report.filters)text(28,536,7,report.filters);y=516;}else{text(32,579,18,report.title,true);text(32,560,9,report.store+" · "+report.period);text(32,542,8,report.filters||"");y=522;}};
