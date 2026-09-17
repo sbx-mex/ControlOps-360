@@ -61,11 +61,15 @@ class SitioPublicoTests(unittest.TestCase):
     def test_maxmin_is_selectable_compact_and_multi_filter(self):
         for token in ('data-multi-filter=', 'data-multi-search=', 'name="controlops-filters"', 'data-maxmin-select=', 'step="0.1"', 'PDF etiquetas', 'primary=i.sapName', "'outputView','Ver en'", 'Pz / Caja'):
             self.assertIn(token, self.ui)
+        for token in ('maxmin-flow', 'maxmin-scope', 'usage-unit-chip', 'Uso desde uso_ac', '1 · DEFINE EL ALCANCE'):
+            self.assertIn(token, self.ui)
         self.assertNotIn("state.openMulti", self.ui)
         self.assertIn("closeMultiFilters", self.ui)
         export = (ROOT / "assets" / "export.mjs").read_text()
         self.assertIn("ACTUALIZACIÓN / IMPRESIÓN", export)
         self.assertIn("PZ / CAJA", export)
+        self.assertIn("roundedRectPath", export)
+        self.assertIn("UNIDAD · ${card.usageUnit", export)
         self.assertIn("/MediaBox [0 0 792 612]", export)
         self.assertNotIn("'Nombre visible'", self.ui)
         trend = self.ui.split("function trendView(){", 1)[1].split("function orderView(){", 1)[0]
