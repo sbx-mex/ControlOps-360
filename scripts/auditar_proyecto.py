@@ -42,6 +42,7 @@ REQUIRED_FILES = {
     "assets/app.js",
     "assets/assembly.mjs",
     "assets/control-ops-360.svg",
+    "assets/cycle-tasks.mjs",
     "assets/engine.mjs",
     "assets/export.mjs",
     "assets/operations.mjs",
@@ -51,6 +52,7 @@ REQUIRED_FILES = {
     "assets/transit.mjs",
     "scripts/auditar_proyecto.py",
     "scripts/auditar_rendimiento.py",
+    "scripts/actualizar_tareas_ciclo.py",
     "scripts/crear_zip_seguro.py",
 }
 LEGACY_DOCS = {
@@ -168,6 +170,22 @@ def audit_integration(root: Path = ROOT) -> dict[str, object]:
         raise AuditError("La interfaz mínima conserva secciones ocultas: " + ", ".join(visible_extras))
     if "#uploadButton{background:#00a862" not in _read("assets/styles.css", root):
         raise AuditError("La carga principal no está identificada en verde.")
+    maxmin_view = ui.split("function maxminView(){", 1)[1].split("function trendView(){", 1)[0]
+    if "quick-status" in maxmin_view or "ALCANCE" in maxmin_view:
+        raise AuditError("Max & Min conserva el resumen de alcance que debe permanecer oculto.")
+    order_view = ui.split("function orderView(){", 1)[1].split("function peakView(){", 1)[0]
+    if not all(token in order_view for token in ("dailyInput(i.minimum", "oneDecimal(rawDaily)", 'data-order-field="dailyUse"')):
+        raise AuditError("Pedido WOE no aplica edición rápida de uso diario a una decimal.")
+    peak_view = ui.split("function peakView(){", 1)[1].split("function normalView(){", 1)[0]
+    peak_contract = ("r.activeSlots", "Tareas de ciclo", "00:00–14:00", "14:00–23:59")
+    peak_engine_contract = ("cycleFrequency", "peak(0,28)", "peak(28,48)", "Medias horas activas")
+    if not all(token in peak_view for token in peak_contract) or not all(token in operations for token in peak_engine_contract):
+        raise AuditError("Peak Hour no cumple turnos, franjas positivas o Tareas de Ciclo.")
+    if any(token in peak_view for token in ("META RÁPIDA", "Mejor bloque + 5", "metric('Órdenes'", "metric('Bloque'", "metric('Impulso'")):
+        raise AuditError("Peak Hour conserva indicadores retirados.")
+    cycle_tasks = _read("assets/cycle-tasks.mjs", root)
+    if not all(f'"{minutes}"' in cycle_tasks for minutes in (30, 20, 12, 8)):
+        raise AuditError("El catálogo de Tareas de Ciclo está incompleto.")
     export_contract = ("CONFIDENCIAL · USO OPERATIVO INTERNO", "Diseñador por Jorge Alcantar Aguiar", "Enrique César Flores", "headerFooter")
     if not all(token in export for token in export_contract):
         raise AuditError("El pie de exportación no está unificado.")
@@ -182,6 +200,8 @@ def audit_integration(root: Path = ROOT) -> dict[str, object]:
         "esfuerzo_integrado_en_top": effort_integrated,
         "sesion_local_recuperable": True,
         "reinicio_local_confirmado": True,
+        "peak_hour_limpio": True,
+        "tareas_ciclo": True,
         "pedido_woe": audit_woe_interface(root),
         "ensamble": audit_assembly_interface(root),
     }

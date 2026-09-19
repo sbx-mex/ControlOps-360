@@ -1,5 +1,15 @@
 # Historial consolidado
 
+## 7.2.0 · Peak Hour operativo y edición rápida
+
+- Oculta en Max & Min el bloque redundante de alcance, uso y selección.
+- Redondea el uso diario de Pedido WOE a una decimal y permite avanzar con `Enter` entre productos.
+- Separa Peak Hour en AM `00:00–14:00` y PM `14:00–23:59`.
+- Muestra únicamente medias horas con actividad mayor a cero.
+- Retira Órdenes, Bloque, Impulso y la tarjeta “Meta rápida”.
+- Integra Tareas de Ciclo con frecuencias de 30, 20, 12 y 8 minutos tomadas del asistente XLSM.
+- Añade un generador Python reproducible, pruebas de umbrales y validaciones de interfaz/exportación.
+
 ## 7.1.0 · Puerta verde e interfaz enfocada
 
 - Corrige la causa del fallo de GitHub Actions: un `ZIP_MANIFEST.sha256` extraído se estaba empaquetando y después se generaba por segunda vez.

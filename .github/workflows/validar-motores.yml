@@ -47,6 +47,7 @@ jobs:
       - name: Validar interfaz pública
         run: |
           node --check assets/app.js
+          node --check assets/cycle-tasks.mjs
           node --check assets/engine.mjs
           node --check assets/export.mjs
           node --check assets/operations.mjs
