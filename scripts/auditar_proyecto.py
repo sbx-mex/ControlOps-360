@@ -18,12 +18,14 @@ try:
     from .auditar_ensamble import audit_table as audit_assembly_table
     from .auditar_pedido_woe import audit_catalog as audit_woe_catalog
     from .auditar_pedido_woe import audit_interface as audit_woe_interface
+    from .auditar_peak_hour import audit as audit_peak_hour
     from .auditar_rendimiento import audit as audit_performance
 except ImportError:  # Ejecución directa: python scripts/auditar_proyecto.py
     from auditar_ensamble import audit_interface as audit_assembly_interface
     from auditar_ensamble import audit_table as audit_assembly_table
     from auditar_pedido_woe import audit_catalog as audit_woe_catalog
     from auditar_pedido_woe import audit_interface as audit_woe_interface
+    from auditar_peak_hour import audit as audit_peak_hour
     from auditar_rendimiento import audit as audit_performance
 
 
@@ -51,6 +53,7 @@ REQUIRED_FILES = {
     "assets/styles.css",
     "assets/transit.mjs",
     "scripts/auditar_proyecto.py",
+    "scripts/auditar_peak_hour.py",
     "scripts/auditar_rendimiento.py",
     "scripts/actualizar_tareas_ciclo.py",
     "scripts/crear_zip_seguro.py",
@@ -177,10 +180,10 @@ def audit_integration(root: Path = ROOT) -> dict[str, object]:
     if not all(token in order_view for token in ("dailyInput(i.minimum", "oneDecimal(rawDaily)", 'data-order-field="dailyUse"')):
         raise AuditError("Pedido WOE no aplica edición rápida de uso diario a una decimal.")
     peak_view = ui.split("function peakView(){", 1)[1].split("function normalView(){", 1)[0]
-    peak_contract = ("r.activeSlots", "Tareas de ciclo", "00:00–14:00", "14:00–23:59")
-    peak_engine_contract = ("cycleFrequency", "peak(0,28)", "peak(28,48)", "Medias horas activas")
+    peak_contract = ("tabs('peak',['Peak Hour','Tarea de Ciclo'])", "Tabla comparativa", "Time Period", "data-peak-real", "data-cycle-activity", "00:00–14:00", "14:00–23:59")
+    peak_engine_contract = ("cycleFrequency", "peakPlanningRows", "planningWeekDates", "cyclePlan", "peakFor(days,0,28)", "peakFor(days,28,48)")
     if not all(token in peak_view for token in peak_contract) or not all(token in operations for token in peak_engine_contract):
-        raise AuditError("Peak Hour no cumple turnos, franjas positivas o Tareas de Ciclo.")
+        raise AuditError("Peak Hour o Tarea de Ciclo no cumplen la experiencia separada.")
     if any(token in peak_view for token in ("META RÁPIDA", "Mejor bloque + 5", "metric('Órdenes'", "metric('Bloque'", "metric('Impulso'")):
         raise AuditError("Peak Hour conserva indicadores retirados.")
     cycle_tasks = _read("assets/cycle-tasks.mjs", root)
@@ -200,8 +203,7 @@ def audit_integration(root: Path = ROOT) -> dict[str, object]:
         "esfuerzo_integrado_en_top": effort_integrated,
         "sesion_local_recuperable": True,
         "reinicio_local_confirmado": True,
-        "peak_hour_limpio": True,
-        "tareas_ciclo": True,
+        "peak_hour": audit_peak_hour(root),
         "pedido_woe": audit_woe_interface(root),
         "ensamble": audit_assembly_interface(root),
     }

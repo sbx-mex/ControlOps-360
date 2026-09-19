@@ -125,16 +125,20 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertIn("row.quantityLabel", export)
         self.assertIn("Uso diario", export)
 
-    def test_peak_hour_is_positive_only_with_cycle_tasks(self):
+    def test_peak_hour_and_cycle_tasks_are_separate_printable_experiences(self):
         peak = self.ui.split("function peakView(){", 1)[1].split("function normalView(){", 1)[0]
         operations = (ROOT / "assets" / "operations.mjs").read_text()
         cycle_tasks = (ROOT / "assets" / "cycle-tasks.mjs").read_text()
-        for token in ("r.activeSlots", "Tareas de ciclo", "00:00–14:00", "14:00–23:59", "FRECUENCIA"):
+        export = (ROOT / "assets" / "export.mjs").read_text()
+        for token in ("tabs('peak',['Peak Hour','Tarea de Ciclo'])", "Tabla comparativa", "Time Period", 'data-peak-real', 'data-cycle-activity', 'data-peak-basis="average"', "00:00–14:00", "14:00–23:59"):
             self.assertIn(token, peak)
         for token in ("META RÁPIDA", "Mejor bloque + 5", "metric('Órdenes'", "metric('Bloque'", "metric('Impulso'"):
             self.assertNotIn(token, peak)
-        for token in ("cycleFrequency", "peak(0,28)", "peak(28,48)", "Medias horas activas"):
+        self.assertNotIn("48 medias horas", peak)
+        for token in ("cycleFrequency", "peakPlanningRows", "planningWeekDates", "cyclePlan", "latestWeekday"):
             self.assertIn(token, operations)
+        for token in ("peak-hour-plan", "cycle-day-plan", "PEAK HOUR · PLAN SEMANAL", "TAREA DE CICLO · PLAN DEL DÍA"):
+            self.assertIn(token, export)
         for token in ('"30"', '"20"', '"12"', '"8"', "Recolectar Loza"):
             self.assertIn(token, cycle_tasks)
     def test_motor_session_is_recoverable_and_reset_is_explicit(self):
@@ -198,7 +202,7 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertNotIn("'effort'", navigation)
 
     def test_navigation_is_focused_accessible_and_progressive(self):
-        for token in ('aria-current="page"', "alignActiveNavigation()", "function detailPanel(", "detailPanel('48 medias horas'", "detailPanel('Uso de productos'", "detailPanel('Concentración por partner'"):
+        for token in ('aria-current="page"', "alignActiveNavigation()", "function detailPanel(", "detailPanel('Time Period'", "detailPanel('Uso de productos'", "detailPanel('Concentración por partner'"):
             self.assertIn(token, self.ui)
         styles = (ROOT / "assets" / "styles.css").read_text()
         for token in (".compact-detail>summary", "scroll-snap-type:x proximity", "scrollbar-width:none"):

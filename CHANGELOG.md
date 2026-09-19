@@ -1,5 +1,16 @@
 # Historial consolidado
 
+## 7.3.0 · Peak Hour y Tarea de Ciclo imprimibles
+
+- Divide la pestaña en dos experiencias: `Peak Hour` y `Tarea de Ciclo`.
+- Prioriza `Promedio` cuando existen varios días comparables y permite alternar al comparable más reciente.
+- Sustituye “Por día” por una tabla semanal con Peak, promedio, objetivo `+5` y captura `Real` para AM y PM.
+- Calcula la siguiente semana operativa; para el corte del 18/09/2026 prepara desde el lunes 21/09/2026.
+- Renombra la matriz de 48 medias horas como `Time Period` y mantiene únicamente periodos con transacciones.
+- Permite elegir el día, editar la actividad sugerida y conservar el plan por tienda, fecha y periodo.
+- Añade dos PDF carta horizontales de una sola página: plan semanal Peak y plan diario de Tarea de Ciclo.
+- Incorpora una puerta Python específica para navegación, catálogo, captura y contratos de impresión.
+
 ## 7.2.0 · Peak Hour operativo y edición rápida
 
 - Oculta en Max & Min el bloque redundante de alcance, uso y selección.

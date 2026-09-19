@@ -13,7 +13,7 @@ export const MODULES=[
  {id:'maxmin',name:'Max & Min',caption:'Mínimos, máximos y etiquetas',icon:'▦',type:'usage'},
  {id:'trend',name:'Tendencia de uso',caption:'Uso por semana y día',icon:'↗',type:'usage'},
  {id:'order',name:'Pedido WOE',caption:'Existencia y pedido',icon:'▤',type:'usage'},
- {id:'peak',name:'Peak Hour',caption:'Objetivo por media hora',icon:'◷',type:'sales'},
+ {id:'peak',name:'Peak Hour',caption:'Objetivos y Tarea de Ciclo',icon:'◷',type:'sales'},
  {id:'normal',name:'Normalizados',caption:'Vasos, FHW y crema',icon:'◉',type:'sales'},
  {id:'assembly',name:'Ensamble',caption:'Preparación por media hora',icon:'◈',type:'sales'},
  {id:'baking',name:'Bitácora de horneo',caption:'Qué hornear y cuándo',icon:'♨',type:'sales'},
@@ -30,6 +30,21 @@ export const sum=(a,key)=>a.reduce((s,r)=>s+(typeof key==='function'?key(r):r[ke
 export const clock=slot=>`${String(Math.floor(slot/2)).padStart(2,'0')}:${slot%2?'30':'00'}`;
 const epsCeil=v=>Math.ceil(v-0.00001);
 export function cycleFrequency(value){const orders=Number(value);if(!Number.isFinite(orders)||orders<=0)return null;if(orders>=36)return 8;if(orders>=26)return 12;if(orders>=11)return 20;return 30;}
+export function cycleTasks(minutes){return CYCLE_TASKS[String(minutes)]||[];}
+export function planningWeekDates(reference,today=''){
+ const parsed=[reference,today].map(dateParts).filter(Boolean).sort((a,b)=>b.dayMs-a.dayMs)[0];
+ if(!parsed)return[];
+ const nextMonday=parsed.dayMs+(parsed.weekday===0?7:7-parsed.weekday)*DAY_MS;
+ return DAY_LABELS.map((day,weekday)=>{const date=new Date(nextMonday+weekday*DAY_MS).toISOString().slice(0,10);return{day,weekday,date};});
+}
+export function peakPlanningRows(result,{today='',basis='average',weekdays=[]}={}){
+ const selected=new Set((weekdays||[]).map(Number)),source=basis==='latest'?result.latestWeekday:result.weekday,dates=planningWeekDates(result.to,today);
+ return source.filter((_,weekday)=>!selected.size||selected.has(weekday)).map((point,weekdayIndex)=>{const weekday=DAY_LABELS.indexOf(point.day),planning=dates[weekday]||{};return{...point,weekday,date:planning.date||'',basis};});
+}
+export function cyclePlan(result,weekday=0){
+ const day=Number(weekday),label=DAY_LABELS[day]||DAY_LABELS[0];
+ return result.slots.map(slot=>{const tx=slot.weekday[day],cycleMinutes=cycleFrequency(tx),tasks=cycleTasks(cycleMinutes);return{slot:slot.slot,label:`${clock(slot.slot)}–${clock(slot.slot+1)}`,period:slot.slot<28?'AM':'PM',day:label,tx,cycleMinutes,suggestedTask:tasks.length?tasks[(slot.slot+day*3)%tasks.length]:''};}).filter(row=>row.tx>0);
+}
 const itemName=(d,r)=>d.productCatalog.get(r.product)?.name||`Sin catálogo (${r.product||'sin ID'})`;
 const pretty=v=>String(v||'').replace(/^\d+_/,'').replaceAll('_',' ');
 
@@ -207,12 +222,13 @@ export function peakHour(d,f={}){
  const facts=filterFacts(d.salesFacts,f),transactions=new Map();
  for(const r of facts){const tx=transactions.get(r.transactionKey);if(!tx||r.ms<tx.ms)transactions.set(r.transactionKey,r);}
  const dates=new Map();for(const tx of transactions.values()){if(!dates.has(tx.dateKey))dates.set(tx.dateKey,Array(48).fill(0));dates.get(tx.dateKey)[tx.slot]++;}
- const days=[...dates.keys()],total=transactions.size;
+ const days=[...dates.keys()].sort(),total=transactions.size;
  const slots=Array.from({length:48},(_,i)=>({slot:i,label:clock(i),total:sum([...dates.values()],r=>r[i]),average:days.length?sum([...dates.values()],r=>r[i])/days.length:null,weekday:DAY_LABELS.map((_,w)=>{const ds=days.filter(day=>dateParts(day).weekday===w);return ds.length?sum(ds,day=>dates.get(day)[i])/ds.length:null;})}));
  const activeSlots=slots.filter(slot=>slot.total>0).map(slot=>{const cycleMinutes=cycleFrequency(slot.average),tasks=CYCLE_TASKS[String(cycleMinutes)]||[];return{...slot,period:slot.slot<28?'AM':'PM',cycleMinutes,cycleTask:tasks.length?tasks[slot.slot%tasks.length]:''};});
  const cycleSummary=[30,20,12,8].map(minutes=>({minutes,count:activeSlots.filter(slot=>slot.cycleMinutes===minutes).length}));
- function peak(start,end,weekday=null){const ds=days.filter(day=>weekday===null||dateParts(day).weekday===weekday);let best=null;for(let i=start;i<=end-4;i++){const count=sum(ds,day=>sum(dates.get(day).slice(i,i+4),x=>x));if(count>0&&(!best||count>best.total))best={slot:i,label:`${clock(i)} - ${clock(i+4)}`,total:count,average:count/ds.length,days:ds.length};}return best?{...best,target:epsCeil(best.average+5),push:5}:null;}
- return {facts,orders:total,sales:sum(facts,'total'),days:days.length,slots,activeSlots,cycleSummary,am:peak(0,28),pm:peak(28,48),weekday:DAY_LABELS.map((day,i)=>({day,days:days.filter(d=>dateParts(d).weekday===i).length,am:peak(0,28,i),pm:peak(28,48,i)})),...dateExtent(facts)};
+ function peakFor(ds,start,end){if(!ds.length)return null;let best=null;for(let i=start;i<=end-4;i++){const count=sum(ds,day=>sum(dates.get(day).slice(i,i+4),x=>x));if(count>0&&(!best||count>best.total))best={slot:i,label:`${clock(i)} - ${clock(i+4)}`,total:count,average:count/ds.length,days:ds.length};}return best?{...best,target:epsCeil(best.average+5),push:5}:null;}
+ const daily=days.map(date=>{const weekday=dateParts(date).weekday;return{date,weekday,day:DAY_LABELS[weekday],am:peakFor([date],0,28),pm:peakFor([date],28,48)};}),weekday=DAY_LABELS.map((day,index)=>{const comparable=days.filter(date=>dateParts(date).weekday===index);return{day,days:comparable.length,sourceDate:comparable.at(-1)||'',am:peakFor(comparable,0,28),pm:peakFor(comparable,28,48)};}),latestWeekday=DAY_LABELS.map((day,index)=>{const latest=daily.filter(item=>item.weekday===index).at(-1);return{day,days:latest?1:0,sourceDate:latest?.date||'',am:latest?.am||null,pm:latest?.pm||null};});
+ return {facts,orders:total,sales:sum(facts,'total'),days:days.length,slots,activeSlots,cycleSummary,am:peakFor(days,0,28),pm:peakFor(days,28,48),daily,weekday,latestWeekday,...dateExtent(facts)};
 }
 
 // Size rules traced to Detalle_vaso Power Query, Reporte Normalizado_v2.
@@ -434,7 +450,11 @@ export function reportFor(module,result,context={}){
   if(transitOrders.length)sheet('Pedidos en tránsito',['Núm. pedido','Entrega','Proveedor','Archivo','Líneas'],transitOrders.map(order=>[order.purchaseOrder,order.deliveryDate,order.providerAlias||order.provider,order.sourceName,order.lines?.length||0]));
   const issues=[...(audit.conflicts||[]),...(audit.unmatched||[])];if(issues.length)sheet('Cruces por revisar',['Núm. pedido','Entrega','#DIA / Material','#SAP','Descripción PDF','Cantidad','Unidad','Motivo'],issues.map(issue=>[issue.order.purchaseOrder,issue.order.deliveryDate,issue.line.material,issue.line.sap,issue.line.description,issue.line.quantity,issue.line.unit,issue.reason]));
  }
- if(module==='peak'){report.summary=[['AM','00:00–14:00'],['PM','14:00–23:59'],['Franjas activas',r.activeSlots.length],['Días observados',r.days]];sheet('Tareas de ciclo',['Turno','Franja','Promedio','Frecuencia','Tarea'],r.activeSlots.map(x=>[x.period,x.label,x.average,`Cada ${x.cycleMinutes} min`,x.cycleTask]));sheet('Medias horas activas',['Franja','Órdenes totales','Promedio',...DAY_LABELS],r.activeSlots.map(x=>[x.label,x.total,x.average,...x.weekday.map(value=>value>0?value:'')]));sheet('Días comparables',['Día','Días','Peak AM','Base AM','Peak PM','Base PM'],r.weekday.map(x=>[x.day,x.days,x.am?.label||'',x.am?.average??null,x.pm?.label||'',x.pm?.average??null]));}
+ if(module==='peak'){
+  const cycleMode=context.peakView==='Tarea de Ciclo';report.layout=cycleMode?'cycle-day-plan':'peak-hour-plan';report.hideSummary=true;report.operationalHeader=true;report.generatedAt=context.today||new Date().toISOString().slice(0,10);report.summary=[];
+  if(cycleMode){report.title='Tarea de Ciclo';report.cycleDay=context.cycleDay||'';report.cycleDate=context.cycleDate||'';report.cycleRows=context.cycleRows||[];sheet('Tarea de Ciclo',['Time Period','TX','CS · Frecuencia de ciclo','Actividad sugerida'],report.cycleRows.map(x=>[x.label,x.tx,`${x.cycleMinutes} min`,x.activity]));}
+  else{report.title='Peak Hour';report.peakBasis=context.peakBasis||'average';report.peakRows=context.peakRows||[];sheet('Tabla comparativa',['Día','Peak AM','Prom. AM','Obj. AM (+5)','Real AM','Peak PM','Prom. PM','Obj. PM (+5)','Real PM'],report.peakRows.map(x=>[`${x.day} ${shortDate(x.date)}`,x.am?.label||'',x.am?.average??'',x.am?.target??'',x.realAm??'',x.pm?.label||'',x.pm?.average??'',x.pm?.target??'',x.realPm??'']));sheet('Time Period',['Time Period','TX total','Promedio',...DAY_LABELS],r.activeSlots.map(x=>[`${x.label}–${clock(x.slot+1)}`,x.total,x.average,...x.weekday.map(value=>value>0?value:'')]));}
+ }
  if(module==='normal'){
   report.summary=[['FHW %',r.fhwRate==null?'—':`${(r.fhwRate*100).toFixed(1)}%`],['FHW emparejado',r.fhw],['Bebidas Starbucks Coffee',r.lobbyBeverages],['Cobertura del motor',r.ruleCoverage==null?'—':`${(r.ruleCoverage*100).toFixed(1)}%`]];
   if(context.subtab==='Crema batida')sheet('Crema batida',['Indicación registrada','Cantidad','Participación'],[['Con crema',r.cream.with,r.cream.with+r.cream.without?r.cream.with/(r.cream.with+r.cream.without):null],['Sin crema',r.cream.without,r.cream.with+r.cream.without?r.cream.without/(r.cream.with+r.cream.without):null]]);

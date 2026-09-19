@@ -2,7 +2,7 @@
 
 Multiherramienta operativa de Starbucks que procesa motores Excel en el navegador, valida sus cruces y activa únicamente las herramientas compatibles con la tienda.
 
-## Qué integra la versión 7.2.0
+## Qué integra la versión 7.3.0
 
 - Resumen 360°: muestra sólo las herramientas habilitadas y agrega accesos directos a Lay Out 2.0 y Code Brew con el CeCo actual en URL y contexto local compartido.
 - Interfaz rápida: menos texto, jerarquía visual compacta, acciones visibles y ayuda contextual desde el icono `i` de cada pestaña.
@@ -18,8 +18,10 @@ Multiherramienta operativa de Starbucks que procesa motores Excel en el navegado
 - Ajuste operativo: el uso diario puede modificarse o restaurarse por producto; el PDF y Excel finales conservan el uso aplicado y la cantidad a pedir.
 - Edición rápida WOE: uso diario visible y guardado a una decimal; `Enter` avanza al siguiente producto.
 - Max & Min: oculta el resumen redundante de alcance, uso y selección; mantiene filtros, tarjetas y exportación.
-- Peak Hour: divide AM `00:00–14:00` y PM `14:00–23:59`, muestra únicamente medias horas con actividad e integra Tareas de Ciclo.
-- Tareas de Ciclo: Python extrae y normaliza el catálogo del asistente operativo; la interfaz consume un módulo estático pequeño con frecuencias de 30, 20, 12 y 8 minutos.
+- Peak Hour: experiencia independiente con base `Promedio` prioritaria, comparativo semanal AM/PM, objetivo automático `+5` y captura de resultado real por tienda y fecha.
+- PDF Peak Hour: genera una sola hoja carta horizontal con tienda, periodo, Peak AM/PM, promedio, objetivo y recuadros `Real`.
+- Tarea de Ciclo: subpestaña independiente por día con `Time Period`, `TX`, `CS` y actividad editable; Python extrae y normaliza 52 actividades con frecuencias de 30, 20, 12 y 8 minutos.
+- PDF Tarea de Ciclo: imprime hasta 48 periodos activos del día en una sola hoja carta horizontal.
 - Proveedores: mantiene un flujo independiente para `DIA`, `Maquila | Café Sirena` y `Lala | Comercializadora Lácteos`.
 - Sesión recuperable: después de validar los Motores, conserva localmente su representación procesada y reconstruye la tienda al actualizar o volver a abrir la página en el mismo navegador.
 - Reinicio seguro: `Reiniciar datos` pide confirmación, borra la sesión, conteos, tránsito y ajustes locales de Control Ops, y vuelve a iniciar sin eliminar los Excel o PDF originales.
@@ -37,6 +39,7 @@ Python valida estructura, seguridad, tablas de cruce, interfaz, exportaciones y 
 ```bash
 python -m unittest discover -s tests -v
 python scripts/auditar_proyecto.py --json
+python scripts/auditar_peak_hour.py --json
 python scripts/auditar_rendimiento.py --json
 node --test tests/*.test.mjs
 node tests/generar_exportacion_max_min.mjs /tmp/max_min_validacion.xlsx
@@ -46,8 +49,8 @@ python scripts/validar_exportacion_max_min.py /tmp/max_min_validacion.xlsx
 El ZIP reproducible se crea y se vuelve a auditar con:
 
 ```bash
-python scripts/crear_zip_seguro.py /tmp/ControlOps-360-v7.2.0.zip
-python scripts/auditar_proyecto.py --zip /tmp/ControlOps-360-v7.2.0.zip --json
+python scripts/crear_zip_seguro.py /tmp/ControlOps-360-v7.3.0.zip
+python scripts/auditar_proyecto.py --zip /tmp/ControlOps-360-v7.3.0.zip --json
 ```
 
 El generador excluye cualquier `ZIP_MANIFEST.sha256` de una entrega anterior y crea exactamente uno nuevo. Por ello puede ejecutarse repetidamente sin duplicar rutas.
