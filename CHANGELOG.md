@@ -1,5 +1,14 @@
 # Historial consolidado
 
+## 7.3.1 · Time Period completo en la segunda página
+
+- Conserva sin cambios la primera hoja comparativa de Peak Hour.
+- Añade una segunda hoja carta horizontal exclusiva para `Time Period`.
+- Ajusta dinámicamente las 48 medias horas para que nunca generen una tercera página.
+- Mantiene únicamente periodos con transacciones mayores a cero.
+- Conserva Tarea de Ciclo como una hoja carta independiente por día.
+- Refuerza la puerta Python y la prueba PDF con contratos exactos de `2 + 1` páginas.
+
 ## 7.3.0 · Peak Hour y Tarea de Ciclo imprimibles
 
 - Divide la pestaña en dos experiencias: `Peak Hour` y `Tarea de Ciclo`.
@@ -8,7 +17,7 @@
 - Calcula la siguiente semana operativa; para el corte del 18/09/2026 prepara desde el lunes 21/09/2026.
 - Renombra la matriz de 48 medias horas como `Time Period` y mantiene únicamente periodos con transacciones.
 - Permite elegir el día, editar la actividad sugerida y conservar el plan por tienda, fecha y periodo.
-- Añade dos PDF carta horizontales de una sola página: plan semanal Peak y plan diario de Tarea de Ciclo.
+- Añade PDF carta horizontales para el plan semanal Peak y el plan diario de Tarea de Ciclo.
 - Incorpora una puerta Python específica para navegación, catálogo, captura y contratos de impresión.
 
 ## 7.2.0 · Peak Hour operativo y edición rápida

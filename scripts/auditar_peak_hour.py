@@ -62,6 +62,8 @@ def audit(root: Path = ROOT) -> dict[str, object]:
         "peak-hour-plan",
         "cycle-day-plan",
         "PEAK HOUR · PLAN SEMANAL",
+        "PEAK HOUR · TIME PERIOD",
+        "48 PERIODOS · SÓLO TX MAYOR A CERO",
         "TAREA DE CICLO · PLAN DEL DÍA",
     )
     style_contract = (".peak-compare", ".peak-real", ".cycle-days", ".cycle-workspace", ".cycle-frequency")
@@ -78,7 +80,8 @@ def audit(root: Path = ROOT) -> dict[str, object]:
     return {
         "estado": "VERDE",
         "vistas": ["Peak Hour", "Tarea de Ciclo"],
-        "pdf_carta": ["peak-hour-plan", "cycle-day-plan"],
+        "pdf_carta": {"peak_hour_paginas": 2, "tarea_ciclo_paginas": 1},
+        "time_period_una_pagina": True,
         "tareas": sum(len(tasks) for tasks in catalog.values()),
         "frecuencias": [30, 20, 12, 8],
         "promedio_prioritario": True,
