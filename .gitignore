@@ -6,3 +6,5 @@
 *.tsv
 __pycache__/
 .DS_Store
+/ZIP_MANIFEST.sha256
+/ControlOps-360-v*.zip

@@ -177,6 +177,13 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertIn("embedded:'top'", operations)
         navigation = self.ui.split("function navigationView(available){", 1)[1].split("function draw(){", 1)[0]
         self.assertNotIn("'effort'", navigation)
+
+    def test_navigation_is_focused_accessible_and_progressive(self):
+        for token in ('aria-current="page"', "alignActiveNavigation()", "function detailPanel(", "detailPanel('48 medias horas'", "detailPanel('Uso de productos'", "detailPanel('Concentración por partner'"):
+            self.assertIn(token, self.ui)
+        styles = (ROOT / "assets" / "styles.css").read_text()
+        for token in (".compact-detail>summary", "scroll-snap-type:x proximity", "scrollbar-width:none"):
+            self.assertIn(token, styles)
     def test_import_graph_is_self_contained(self):
         for p in (ROOT / "assets").glob("*"):
             if p.suffix not in (".mjs", ".js"):

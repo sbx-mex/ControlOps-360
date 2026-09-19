@@ -10,7 +10,7 @@ import os
 import subprocess
 import tempfile
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 try:
     from .auditar_proyecto import ROOT, AuditError, audit_project, audit_zip
@@ -19,6 +19,7 @@ except ImportError:  # Ejecución directa desde scripts/.
 
 
 FIXED_TIME = (2026, 1, 1, 0, 0, 0)
+GENERATED_ROOT_FILES = frozenset({"zip_manifest.sha256"})
 
 
 def project_files(root: Path, output: Path) -> list[Path]:
@@ -28,6 +29,9 @@ def project_files(root: Path, output: Path) -> list[Path]:
     selected: list[Path] = []
     output_resolved = output.resolve()
     for name in names:
+        logical_name = PurePosixPath(name).as_posix()
+        if logical_name.casefold() in GENERATED_ROOT_FILES:
+            continue
         path = root / name
         if path.resolve() == output_resolved or path.suffix.lower() == ".zip" or "__pycache__" in path.parts:
             continue
@@ -60,8 +64,13 @@ def create_archive(output: Path, root: Path = ROOT) -> dict[str, object]:
     archive_root = f"ControlOps-360-v{version}"
     payload: list[tuple[str, bytes, bool]] = []
     manifest: list[str] = []
+    logical_names: set[str] = set()
     for path in files:
         relative = path.relative_to(root).as_posix()
+        folded = relative.casefold()
+        if folded in logical_names:
+            raise AuditError(f"Rutas duplicadas por mayúsculas antes de empacar: {relative}")
+        logical_names.add(folded)
         data = path.read_bytes()
         if len(data) > 25 * 1024 * 1024:
             raise AuditError(f"Archivo demasiado grande para la entrega: {relative}")
