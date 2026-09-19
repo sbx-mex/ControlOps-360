@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
   "project": "sbx-mex/ControlOps-360",
-  "version": "7.0.0",
-  "baseline": "25914bd8f337b78dd2169895dbd859b44b2d3896",
+  "version": "7.1.0",
+  "baseline": "f312f485ffd7a726cdbf362239b322b150e209eb",
   "date": "2026-09-19",
-  "release": "interfaz-rapida-accesos-directos-esfuerzo-integrado",
+  "release": "puerta-verde-zip-idempotente-navegacion-enfocada",
   "update_policy": {
     "replacement": "atomic",
     "python_gate": "scripts/auditar_proyecto.py",
@@ -34,12 +34,16 @@
     "direct_app_context",
     "tab_help_dialog",
     "persistent_multi_select",
+    "progressive_secondary_detail",
+    "accessible_active_navigation",
+    "idempotent_zip_manifest",
     "void_audit"
   ],
   "continuity_matrix": [
     {"module":"Resumen 360°","latest_request":"Menú limpio con acceso a Lay Out 2.0 y Code Brew","current":"Menú esencial y accesos directos con CeCo","gap":"Ninguno","change":"Retira Esfuerzo independiente y publica contexto directo para ambas aplicaciones","validation":"site tests y auditor Python"},
     {"module":"Interfaz y ayuda","latest_request":"Menos texto, más intuición y detalles simplificados","current":"Densidad compacta y ayuda contextual","gap":"Ninguno","change":"Icono superior de ayuda y guías breves por pestaña","validation":"site tests y revisión visual"},
     {"module":"Filtros","latest_request":"Selección múltiple sin cierre accidental y salida fácil","current":"Menú persistente con salida explícita","gap":"Ninguno","change":"Conserva el filtro abierto al marcar y cierra con Listo, Escape o clic exterior","validation":"site tests y auditor Python"},
+    {"module":"Entrega ZIP","latest_request":"Actualizar en verde aunque exista un manifiesto anterior","current":"Generación idempotente","gap":"Ninguno","change":"Excluye ZIP_MANIFEST.sha256 anterior, crea uno nuevo y bloquea duplicados antes de escribir","validation":"regresión Python, auditor ZIP y GitHub Actions"},
     {"module":"Max & Min","latest_request":"Mantener selección, filtros y exportación","current":"Estable","gap":"Ninguna regresión aceptable","change":"Conservado","validation":"engine y export tests"},
     {"module":"Tendencia","latest_request":"Producto y días comparables","current":"Estable","gap":"Ninguna regresión aceptable","change":"Conservado","validation":"engine tests"},
     {"module":"Pedido WOE","latest_request":"Fechas libres, uso diario editable y PDF validado contra la tienda","current":"Flujo seguro separado por proveedor","gap":"Ninguno","change":"Lista próximas fechas activas, retira las cubiertas por tránsito, valida CeCo/nombre antes de incorporar y exporta uso aplicado más cantidad","validation":"24 escenarios Python, engine, transit, export y site tests"},

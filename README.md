@@ -2,10 +2,11 @@
 
 Multiherramienta operativa de Starbucks que procesa motores Excel en el navegador, valida sus cruces y activa únicamente las herramientas compatibles con la tienda.
 
-## Qué integra la versión 7.0.0
+## Qué integra la versión 7.1.0
 
 - Resumen 360°: muestra sólo las herramientas habilitadas y agrega accesos directos a Lay Out 2.0 y Code Brew con el CeCo actual en URL y contexto local compartido.
 - Interfaz rápida: menos texto, jerarquía visual compacta, acciones visibles y ayuda contextual desde el icono `i` de cada pestaña.
+- Navegación enfocada: el módulo activo queda identificado y los comparativos secundarios permanecen cerrados hasta solicitarlos.
 - Inventario: Max & Min, Tendencia de uso y Pedido WOE con fecha actual fija, recepciones fechadas y tránsito PDF local.
 - Operación: Peak Hour, Normalizados, Ensamble y Horneo.
 - Indicadores: Top Bebidas & Alimentos integra Esfuerzo Operativo exclusivamente para Cake Pop y Dona G&G.
@@ -41,9 +42,11 @@ python scripts/validar_exportacion_max_min.py /tmp/max_min_validacion.xlsx
 El ZIP reproducible se crea y se vuelve a auditar con:
 
 ```bash
-python scripts/crear_zip_seguro.py /tmp/ControlOps-360-v7.0.0.zip
-python scripts/auditar_proyecto.py --zip /tmp/ControlOps-360-v7.0.0.zip --json
+python scripts/crear_zip_seguro.py /tmp/ControlOps-360-v7.1.0.zip
+python scripts/auditar_proyecto.py --zip /tmp/ControlOps-360-v7.1.0.zip --json
 ```
+
+El generador excluye cualquier `ZIP_MANIFEST.sha256` de una entrega anterior y crea exactamente uno nuevo. Por ello puede ejecutarse repetidamente sin duplicar rutas.
 
 Para revisar la interfaz localmente:
 

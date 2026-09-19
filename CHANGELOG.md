@@ -1,5 +1,14 @@
 # Historial consolidado
 
+## 7.1.0 · Puerta verde e interfaz enfocada
+
+- Corrige la causa del fallo de GitHub Actions: un `ZIP_MANIFEST.sha256` extraído se estaba empaquetando y después se generaba por segunda vez.
+- Convierte el generador Python en idempotente: siempre excluye manifiestos anteriores y valida rutas sin distinción de mayúsculas antes de escribir el ZIP.
+- Agrega una regresión específica para impedir que el manifiesto duplicado vuelva a romper la puerta de calidad.
+- Reduce ruido visual al guardar tablas secundarias dentro de detalles opcionales en Tendencia, Peak Hour y Auditoría.
+- Marca la pestaña activa para lectores de pantalla y centra automáticamente la navegación horizontal en móvil.
+- Mantiene intactos los filtros múltiples, accesos directos, ayuda contextual y Esfuerzo Operativo integrado de la versión 7.0.0.
+
 ## 7.0.0 · Interfaz rápida y Esfuerzo integrado
 
 - Reduce texto, espacios y controles repetidos en todas las pestañas para acelerar la validación visual.

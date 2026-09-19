@@ -1,11 +1,12 @@
 import hashlib
+import subprocess
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 
 from scripts.auditar_proyecto import AuditError, audit_project, audit_zip
-from scripts.crear_zip_seguro import create_archive
+from scripts.crear_zip_seguro import create_archive, project_files
 
 
 class ProjectIntegrityTests(unittest.TestCase):
@@ -27,6 +28,16 @@ class ProjectIntegrityTests(unittest.TestCase):
             self.assertEqual(created["sha256"], __import__("hashlib").sha256(target.read_bytes()).hexdigest())
             self.assertEqual(audited["estado"], "VERDE")
             self.assertGreater(audited["huellas"], 20)
+
+    def test_zip_builder_ignores_a_previous_generated_manifest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "keep.txt").write_text("conservar", encoding="utf-8")
+            (root / "ZIP_MANIFEST.sha256").write_text("entrega anterior", encoding="utf-8")
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "add", "-f", "keep.txt", "ZIP_MANIFEST.sha256"], cwd=root, check=True)
+            selected = project_files(root, root / "ControlOps-360.zip")
+            self.assertEqual([path.name for path in selected], ["keep.txt"])
 
     def test_zip_rejects_path_traversal(self):
         with tempfile.TemporaryDirectory() as temporary:
