@@ -2,7 +2,7 @@
 
 Multiherramienta operativa de Starbucks que procesa motores Excel en el navegador, valida sus cruces y activa únicamente las herramientas compatibles con la tienda.
 
-## Qué integra la versión 7.3.0
+## Qué integra la versión 7.3.1
 
 - Resumen 360°: muestra sólo las herramientas habilitadas y agrega accesos directos a Lay Out 2.0 y Code Brew con el CeCo actual en URL y contexto local compartido.
 - Interfaz rápida: menos texto, jerarquía visual compacta, acciones visibles y ayuda contextual desde el icono `i` de cada pestaña.
@@ -19,7 +19,7 @@ Multiherramienta operativa de Starbucks que procesa motores Excel en el navegado
 - Edición rápida WOE: uso diario visible y guardado a una decimal; `Enter` avanza al siguiente producto.
 - Max & Min: oculta el resumen redundante de alcance, uso y selección; mantiene filtros, tarjetas y exportación.
 - Peak Hour: experiencia independiente con base `Promedio` prioritaria, comparativo semanal AM/PM, objetivo automático `+5` y captura de resultado real por tienda y fecha.
-- PDF Peak Hour: genera una sola hoja carta horizontal con tienda, periodo, Peak AM/PM, promedio, objetivo y recuadros `Real`.
+- PDF Peak Hour: genera exactamente dos hojas carta horizontales; la primera conserva el comparativo AM/PM y la segunda concentra hasta 48 filas de `Time Period` en una sola página.
 - Tarea de Ciclo: subpestaña independiente por día con `Time Period`, `TX`, `CS` y actividad editable; Python extrae y normaliza 52 actividades con frecuencias de 30, 20, 12 y 8 minutos.
 - PDF Tarea de Ciclo: imprime hasta 48 periodos activos del día en una sola hoja carta horizontal.
 - Proveedores: mantiene un flujo independiente para `DIA`, `Maquila | Café Sirena` y `Lala | Comercializadora Lácteos`.
@@ -49,8 +49,8 @@ python scripts/validar_exportacion_max_min.py /tmp/max_min_validacion.xlsx
 El ZIP reproducible se crea y se vuelve a auditar con:
 
 ```bash
-python scripts/crear_zip_seguro.py /tmp/ControlOps-360-v7.3.0.zip
-python scripts/auditar_proyecto.py --zip /tmp/ControlOps-360-v7.3.0.zip --json
+python scripts/crear_zip_seguro.py /tmp/ControlOps-360-v7.3.1.zip
+python scripts/auditar_proyecto.py --zip /tmp/ControlOps-360-v7.3.1.zip --json
 ```
 
 El generador excluye cualquier `ZIP_MANIFEST.sha256` de una entrega anterior y crea exactamente uno nuevo. Por ello puede ejecutarse repetidamente sin duplicar rutas.
