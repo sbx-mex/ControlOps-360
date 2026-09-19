@@ -9,18 +9,18 @@ export function providerAlias(value){
  return'DIA';
 }
 export const MODULES=[
- {id:'maxmin',name:'Max & Min',caption:'Uso, mínimos y tarjetas',icon:'▦',type:'usage'},
- {id:'trend',name:'Tendencia de uso',caption:'Productos y días comparables',icon:'↗',type:'usage'},
- {id:'order',name:'Pedido WOE',caption:'Cobertura, existencias y pedido',icon:'▤',type:'usage'},
- {id:'peak',name:'Peak Hour',caption:'Todo el día, cada media hora',icon:'◷',type:'sales'},
- {id:'normal',name:'Normalizados',caption:'Tamaños, vasos y crema',icon:'◉',type:'sales'},
- {id:'assembly',name:'Ensamble',caption:'Plan por media hora e ingredientes',icon:'◈',type:'sales'},
- {id:'baking',name:'Bitácora de horneo',caption:'Previsión y próximas tandas',icon:'♨',type:'sales'},
- {id:'top',name:'Top Bebidas & Alimentos',caption:'Ranking y mezcla semanal',icon:'≡',type:'sales'},
- {id:'effort',name:'Esfuerzo Operativo',caption:'USD y UPT de productos de impulso',icon:'◆',type:'sales'},
- {id:'audit',name:'Voids · Auditoría',caption:'Foco y desglose por ticket',icon:'◇',type:'audit'},
+ {id:'maxmin',name:'Max & Min',caption:'Mínimos, máximos y etiquetas',icon:'▦',type:'usage'},
+ {id:'trend',name:'Tendencia de uso',caption:'Uso por semana y día',icon:'↗',type:'usage'},
+ {id:'order',name:'Pedido WOE',caption:'Existencia y pedido',icon:'▤',type:'usage'},
+ {id:'peak',name:'Peak Hour',caption:'Objetivo por media hora',icon:'◷',type:'sales'},
+ {id:'normal',name:'Normalizados',caption:'Vasos, FHW y crema',icon:'◉',type:'sales'},
+ {id:'assembly',name:'Ensamble',caption:'Preparación por media hora',icon:'◈',type:'sales'},
+ {id:'baking',name:'Bitácora de horneo',caption:'Qué hornear y cuándo',icon:'♨',type:'sales'},
+ {id:'top',name:'Top Bebidas & Alimentos',caption:'Ranking, mezcla y esfuerzo',icon:'≡',type:'sales'},
+ {id:'effort',name:'Esfuerzo Operativo',caption:'Cake Pop y Dona G&G',icon:'◆',type:'sales',embedded:'top'},
+ {id:'audit',name:'Voids · Auditoría',caption:'Voids y detalle por ticket',icon:'◇',type:'audit'},
 ];
-export function availableModules(d){return MODULES.filter(m=>m.type==='audit'?['auditTicket','auditVoid','auditLegacy'].some(type=>d.sourceTypes.has(type)):m.type==='usage'?d.usageFacts.length:d.salesFacts.length&&(m.id==='peak'||d.productCatalog.size));}
+export function availableModules(d){return MODULES.filter(m=>!m.embedded).filter(m=>m.type==='audit'?['auditTicket','auditVoid','auditLegacy'].some(type=>d.sourceTypes.has(type)):m.type==='usage'?d.usageFacts.length:d.salesFacts.length&&(m.id==='peak'||d.productCatalog.size));}
 export function filterFacts(facts,f={}){
  const weeks=Array.isArray(f.weeks)?f.weeks.filter(Boolean):[],weekdays=Array.isArray(f.weekdays)?f.weekdays.filter(v=>v!==''&&v!=null).map(Number):[],modes=Array.isArray(f.modes)?f.modes.filter(Boolean):[];
  return facts.filter(r=>(!f.store||r.store===f.store)&&(!f.from||r.dateKey>=f.from)&&(!f.to||r.dateKey<=f.to)&&(!f.week||weekKey(r.dateKey)===f.week)&&(!weeks.length||weeks.includes(weekKey(r.dateKey)))&&(f.weekday==null||f.weekday===''||r.weekday===Number(f.weekday))&&(!weekdays.length||weekdays.includes(r.weekday))&&(!f.mode||r.mode===f.mode)&&(!modes.length||modes.includes(r.mode)));
@@ -329,13 +329,11 @@ export function assemblyProjection(d,f={}){
  return {products:rows,slots,activeSlots,days,dates,weeks:new Set(dates.map(weekKey)).size,average:days?sum(rows,'historical')/days:null,planned:sum(rows,'plan'),peak,returns,unmapped,sourceRules:sourceRules.length,recipesReady:rows.filter(product=>product.recipe).length,...dateExtent(facts)};
 }
 
-export const EFFORT_GROUPS=["Cake Pop's",'Galletas','Dona G&G','Pan de Muerto'];
+export const EFFORT_GROUPS=['Cake Pop','Dona G&G'];
 export function effortProductGroup(name){
  const key=normalize(name);
  if(key.startsWith('cakepop'))return EFFORT_GROUPS[0];
- if(key.startsWith('galleta'))return EFFORT_GROUPS[1];
- if(['donachocolateconnuez','donagg','donasgg'].includes(key))return EFFORT_GROUPS[2];
- if(['panmuerto','pandemuerto','minipanmuerto','minipandemuerto'].some(prefix=>key.startsWith(prefix)))return EFFORT_GROUPS[3];
+ if(['donachocolateconnuez','donagg','donasgg'].includes(key))return EFFORT_GROUPS[1];
  return null;
 }
 function effortBucket(d,facts){

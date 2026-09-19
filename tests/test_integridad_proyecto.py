@@ -12,7 +12,9 @@ class ProjectIntegrityTests(unittest.TestCase):
     def test_complete_project_is_green(self):
         report = audit_project()
         self.assertEqual(report["estado"], "VERDE")
-        self.assertEqual(report["integracion_360"]["modulos_navegables"], 10)
+        self.assertEqual(report["integracion_360"]["modulos_navegables"], 9)
+        self.assertEqual(report["integracion_360"]["modulos_exportables"], 10)
+        self.assertTrue(report["integracion_360"]["esfuerzo_integrado_en_top"])
         self.assertEqual(report["seguridad"]["bases_operativas"], 0)
         self.assertLessEqual(report["rendimiento"]["grafo_inicial_bytes"], report["rendimiento"]["presupuesto_bytes"])
         self.assertGreater(report["rendimiento"]["reduccion_porcentaje"], 60)

@@ -2,14 +2,16 @@
 
 Multiherramienta operativa de Starbucks que procesa motores Excel en el navegador, valida sus cruces y activa únicamente las herramientas compatibles con la tienda.
 
-## Qué integra la versión 6.5.0
+## Qué integra la versión 7.0.0
 
-- Resumen 360°: muestra únicamente las herramientas habilitadas por los Motores cargados.
+- Resumen 360°: muestra sólo las herramientas habilitadas y agrega accesos directos a Lay Out 2.0 y Code Brew con el CeCo actual en URL y contexto local compartido.
+- Interfaz rápida: menos texto, jerarquía visual compacta, acciones visibles y ayuda contextual desde el icono `i` de cada pestaña.
 - Inventario: Max & Min, Tendencia de uso y Pedido WOE con fecha actual fija, recepciones fechadas y tránsito PDF local.
-- Operación: Peak Hour, Normalizados, Ensamble, Horneo, Top y Esfuerzo Operativo.
+- Operación: Peak Hour, Normalizados, Ensamble y Horneo.
+- Indicadores: Top Bebidas & Alimentos integra Esfuerzo Operativo exclusivamente para Cake Pop y Dona G&G.
 - Control: Auditoría de Voids por ticket, partner, puesto, motivo y riesgo vinculado.
 - Exportación: Excel y PDF del módulo activo, con pie de confidencialidad uniforme.
-- Filtros: selección de un toque, cierre automático, búsqueda en listas largas y cierre con Escape o clic exterior.
+- Filtros: selección múltiple persistente, búsqueda en listas largas y salida clara con `Listo`, Escape o clic exterior.
 - Pedido WOE: lista de próximas fechas reales según los días activos; una fecha desaparece cuando ya existe un PDF en tránsito y el botón `Usar siguiente` acelera la captura.
 - Validación de tránsito: compara el CeCo y nombre disponibles en cada PDF contra la tienda de los Motores; confirma lo aprobado y rechaza sin incorporar cualquier identidad ajena o no verificable.
 - Ajuste operativo: el uso diario puede modificarse o restaurarse por producto; el PDF y Excel finales conservan el uso aplicado y la cantidad a pedir.
@@ -39,8 +41,8 @@ python scripts/validar_exportacion_max_min.py /tmp/max_min_validacion.xlsx
 El ZIP reproducible se crea y se vuelve a auditar con:
 
 ```bash
-python scripts/crear_zip_seguro.py /tmp/ControlOps-360-v6.5.0.zip
-python scripts/auditar_proyecto.py --zip /tmp/ControlOps-360-v6.5.0.zip --json
+python scripts/crear_zip_seguro.py /tmp/ControlOps-360-v7.0.0.zip
+python scripts/auditar_proyecto.py --zip /tmp/ControlOps-360-v7.0.0.zip --json
 ```
 
 Para revisar la interfaz localmente:

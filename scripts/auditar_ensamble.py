@@ -86,7 +86,7 @@ def audit_interface(root: Path = ROOT) -> dict[str, bool]:
     recipes = (root / "assets" / "assembly.mjs").read_text(encoding="utf-8")
     checks = {
         "filtro_multiple_semana_dia": "multiFilter('weeks'" in ui and "multiFilter('weekdays'" in ui,
-        "guia_pedagogica": all(text in ui for text in ("Elige semanas", "Marca los días", "Prepara por franja", "Anticipa ingredientes")),
+        "guia_rapida_centralizada": all(text in ui for text in ("assembly:{title:'Ensamble'", "Semanas y días", "La cifra grande", "Anticipa','Ingredientes")),
         "motor_48_franjas": "Array.from({length:48}" in operations and "assemblyProjection" in operations,
         "redondeo_y_devoluciones": "epsCeil(total/days)" in operations and "row.adjusted<0" in operations,
         "recetas_completas": all(name in recipes for name in set(EXPECTED.values())),

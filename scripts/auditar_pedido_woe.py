@@ -233,7 +233,7 @@ def audit_interface(root: Path = ROOT) -> dict[str, bool]:
         "fechas_de_transito_retiradas": "availableOrderDates" in operations and "!occupied.has(candidate.dateKey)" in operations,
         "accion_rapida_siguiente": 'data-action="select-next-order"' in order and "Usar siguiente" in order,
         "navegacion_por_actividad": all(token in ui for token in ('data-order-jump="order-cycle"', 'data-order-jump="order-transit"', 'data-order-jump="order-count"', "scrollIntoView")),
-        "proveedores_explicitos": all(token in ui for token in ("DIA", "Maquila | Café Sirena", "Lala | Comercializadora Lácteos", "PEDIDO POR PROVEEDOR")),
+        "proveedores_explicitos": all(token in ui for token in ("DIA", "Maquila | Café Sirena", "Lala | Comercializadora Lácteos", "Cambiar proveedor")),
         "productos_por_proveedor": "f.provider&&provider!==providerAlias(f.provider)" in operations,
         "transito_por_proveedor": "filter(order=>providerAlias(order.providerAlias||order.provider)===providerAlias(provider))" in ui and "orderTransitFor(provider)" in order,
         "pdf_transito_local": "parseOrderPdf" in ui and (root / "assets" / "vendor" / "pdf.min.mjs").is_file(),

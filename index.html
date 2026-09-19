@@ -32,12 +32,13 @@
  <section id="workspace" class="workspace" hidden>
   <aside class="sidebar"><span class="sidebar-label">HERRAMIENTAS</span><nav id="moduleNav" aria-label="Herramientas"></nav></aside>
   <div class="workarea">
-   <div class="page-heading"><div><button id="backButton" class="back-summary" hidden>← Resumen</button><p class="eyebrow" id="periodTitle"></p><h1 id="moduleTitle"></h1></div><div class="export-actions" id="exportActions" hidden><button id="excelButton">Excel ↓</button><button id="pdfButton">PDF ↓</button></div></div>
+   <div class="page-heading"><div><button id="backButton" class="back-summary" hidden>← Resumen</button><p class="eyebrow" id="periodTitle"></p><h1 id="moduleTitle"></h1></div><div class="page-actions"><button id="aboutButton" class="about-button" type="button" aria-label="Acerca de esta pestaña" title="Acerca de esta pestaña">i</button><div class="export-actions" id="exportActions" hidden><button id="excelButton">Excel ↓</button><button id="pdfButton">PDF ↓</button></div></div></div>
    <div id="moduleContent"></div>
   </div>
  </section>
 </main>
 <dialog id="confirmation" aria-labelledby="confirmationTitle"><div class="confirm-icon">✓</div><h2 id="confirmationTitle">Tienda lista</h2><div id="confirmationContent"></div><button id="confirmButton" class="primary">Continuar</button></dialog>
+<dialog id="aboutDialog" class="about-dialog" aria-labelledby="aboutTitle"><div class="about-dialog-head"><span aria-hidden="true">i</span><div><small>GUÍA RÁPIDA</small><h2 id="aboutTitle">Acerca de esta pestaña</h2></div></div><p id="aboutIntro"></p><div id="aboutSteps" class="about-steps"></div><button id="closeAboutButton" class="primary">Entendido</button></dialog>
 <dialog id="resetConfirmation" aria-labelledby="resetTitle"><div class="confirm-icon reset-icon">↻</div><h2 id="resetTitle">¿Reiniciar datos locales?</h2><p>Se borrarán los Motores procesados, conteos, pedidos en tránsito, fechas y filtros guardados por Control Ops en este dispositivo.</p><p class="reset-note">Tus archivos Excel y PDF originales no se eliminan.</p><div class="dialog-actions"><button id="cancelResetButton">Conservar sesión</button><button id="confirmResetButton" class="danger">Sí, borrar y reiniciar</button></div></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <footer class="site-footer"><div><img src="assets/control-ops-360.svg" width="34" height="34" alt=""><span><strong>Control Ops 360°</strong><small>JUNTÉMONOS MÁS · #GreenApronService</small></span></div><p><b>CONFIDENCIAL · USO OPERATIVO INTERNO</b><span>Los archivos se procesan localmente y no se envían a terceros.</span></p><small>Diseñador por Jorge Alcantar Aguiar &amp; Enrique César Flores</small></footer>

@@ -55,15 +55,17 @@ class SitioPublicoTests(unittest.TestCase):
         for role in ('"food"', '"drink"', '"cream"', '"baking"'):
             self.assertIn(role, reader)
     def test_active_menu_exports(self):
-        self.assertIn("reportFor(state.module", self.ui)
+        self.assertIn("reportFor(reportModule", self.ui)
+        self.assertIn("state.reportModule='effort'", self.ui)
         self.assertIn("createExecutiveWorkbook(report)", self.ui)
         self.assertIn("createExecutivePdf(report)", self.ui)
     def test_maxmin_is_selectable_compact_and_multi_filter(self):
-        for token in ('data-multi-filter=', 'data-multi-search=', 'name="controlops-filters"', 'data-maxmin-select=', 'step="0.1"', 'PDF etiquetas', 'primary=i.sapName', "'outputView','Ver en'", 'Pz / Caja'):
+        for token in ('data-multi-filter=', 'data-multi-search=', 'data-close-multi=', 'name="controlops-filters"', 'data-maxmin-select=', 'step="0.1"', 'PDF etiquetas', 'primary=i.sapName', "'outputView','Vista'", 'Pz / Caja'):
             self.assertIn(token, self.ui)
-        for token in ('maxmin-flow', 'maxmin-scope', 'usage-unit-chip', 'Uso desde uso_ac', '1 · DEFINE EL ALCANCE'):
+        for token in ('quick-status', 'usage-unit-chip', 'Uso desde uso_ac', 'Selección múltiple'):
             self.assertIn(token, self.ui)
-        self.assertNotIn("state.openMulti", self.ui)
+        self.assertIn("state.openMultiFilter=name", self.ui)
+        self.assertIn("state.openMultiFilter===name?' open':''", self.ui)
         self.assertIn("closeMultiFilters", self.ui)
         export = (ROOT / "assets" / "export.mjs").read_text()
         self.assertIn("ACTUALIZACIÓN / IMPRESIÓN", export)
@@ -100,7 +102,7 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertIn("f.provider&&provider!==providerAlias(f.provider)", operations)
         self.assertIn("filter(order=>providerAlias(order.providerAlias||order.provider)===providerAlias(provider))", self.ui)
         self.assertIn("orderTransitFor(provider)", order)
-        self.assertIn("PEDIDO POR PROVEEDOR", order)
+        self.assertIn("Cambiar proveedor", order)
 
     def test_order_validates_store_identity_and_editable_daily_use(self):
         order = self.ui.split("function orderView(){", 1)[1].split("function peakView(){", 1)[0]
@@ -156,13 +158,25 @@ class SitioPublicoTests(unittest.TestCase):
     def test_management_navigation_and_lazy_heavy_modules(self):
         for token in ("Resumen 360°", "function menuView()", "Selecciona una herramienta", "← Resumen"):
             self.assertIn(token, self.html + self.ui)
-        for token in ("Acerca de", "Seguridad", "Finanzas", "Alcance y calidad", "Fuentes cargadas", "function financeView()", "function scopeView()", "function sourcesView()"):
+        for token in ("Seguridad", "Finanzas", "Alcance y calidad", "Fuentes cargadas", "function financeView()", "function scopeView()", "function sourcesView()"):
             self.assertNotIn(token, self.html + self.ui)
+        for token in ("aboutButton", "aboutDialog", "Acerca de esta pestaña", "MODULE_HELP"):
+            self.assertIn(token, self.html + self.ui)
         self.assertIn("#uploadButton{background:#00a862", (ROOT / "assets/styles.css").read_text())
         first_lines = "\n".join(self.ui.splitlines()[:2])
         for module in ("parameters.mjs", "reader.mjs", "export.mjs", "transit.mjs"):
             self.assertNotIn(f"from './{module}'", first_lines)
             self.assertIn(f"import('./{module}')", self.ui)
+
+    def test_summary_has_direct_apps_and_effort_is_embedded_in_top(self):
+        operations = (ROOT / "assets/operations.mjs").read_text()
+        for token in ("https://sbx-mex.github.io/Lay-Out_2.0/", "https://sbx-mex.github.io/CodeBrew_Merch/", "data-direct-app=", "sbx-ops-direct-context-v1", "params.set('ceco',id)"):
+            self.assertIn(token, self.ui)
+        for token in ("tabs('top',['Bebidas','Alimentos','Esfuerzo Operativo'])", "effortView(true)", "state.reportModule='effort'", "Cake Pop + Dona G&amp;G"):
+            self.assertIn(token, self.ui)
+        self.assertIn("embedded:'top'", operations)
+        navigation = self.ui.split("function navigationView(available){", 1)[1].split("function draw(){", 1)[0]
+        self.assertNotIn("'effort'", navigation)
     def test_import_graph_is_self_contained(self):
         for p in (ROOT / "assets").glob("*"):
             if p.suffix not in (".mjs", ".js"):

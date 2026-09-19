@@ -64,7 +64,8 @@ LEGACY_DOCS = {
     "PEDIDO_WOE_MANIFEST.json",
     "TOP_ESFUERZO_MANIFEST.json",
 }
-MODULES = ("maxmin", "trend", "order", "peak", "normal", "assembly", "baking", "top", "effort", "audit")
+NAV_MODULES = ("maxmin", "trend", "order", "peak", "normal", "assembly", "baking", "top", "audit")
+REPORT_MODULES = (*NAV_MODULES[:-1], "effort", "audit")
 
 
 class AuditError(AssertionError):
@@ -137,12 +138,15 @@ def audit_integration(root: Path = ROOT) -> dict[str, object]:
     operations = _read("assets/operations.mjs", root)
     export = _read("assets/export.mjs", root)
     index = _read("index.html", root)
-    missing_modules = [module for module in MODULES if f"id:'{module}'" not in operations or f"{module}:" not in ui]
+    missing_modules = [module for module in NAV_MODULES if f"id:'{module}'" not in operations or f"{module}:" not in ui]
     if missing_modules:
         raise AuditError("Módulos no integrados en navegación: " + ", ".join(missing_modules))
-    missing_exports = [module for module in MODULES if f"if(module==='{module}')" not in operations]
+    missing_exports = [module for module in REPORT_MODULES if f"if(module==='{module}')" not in operations]
     if missing_exports:
         raise AuditError("Módulos sin reporte estable: " + ", ".join(missing_exports))
+    effort_integrated = all(token in ui for token in ("tabs('top',['Bebidas','Alimentos','Esfuerzo Operativo'])", "effortView(true)", "state.reportModule='effort'"))
+    if not effort_integrated or "['top','effort']" in ui:
+        raise AuditError("Esfuerzo Operativo no está integrado únicamente dentro de Top.")
     visible_contract = (
         "JUNTÉMONOS MÁS",
         "#GreenApronService",
@@ -152,13 +156,13 @@ def audit_integration(root: Path = ROOT) -> dict[str, object]:
     visible_surface = index + "\n" + ui
     if not all(token in visible_surface for token in visible_contract):
         raise AuditError("Identidad o confidencialidad incompleta.")
-    management_contract = ("Resumen 360°", "Selecciona una herramienta", "Mismo CeCo, tipo y periodo", "loadParameters", "loadReader", "loadExporter", 'name="controlops-filters"', "data-multi-search", "closeMultiFilters")
+    management_contract = ("Resumen 360°", "Selecciona una herramienta", "Lay Out 2.0", "Code Brew", "sbx-ops-direct-context-v1", "aboutButton", "MODULE_HELP", "Mismo CeCo, tipo y periodo", "loadParameters", "loadReader", "loadExporter", 'name="controlops-filters"', "data-multi-search", "data-close-multi", "openMultiFilter", "closeMultiFilters")
     if not all(token in visible_surface for token in management_contract):
         raise AuditError("Menú operativo, filtros rápidos o carga diferida incompleta.")
     session_contract = ("saveStatus", "Reiniciar datos", "resetConfirmation", "indexedDB.open", "writeWorkspaceSnapshot", "restoreWorkspaceSnapshot", "clearWorkspaceSnapshot", "navigator.storage.persist", "localStorage.removeItem('controlops-v5-settings')", "beforeunload", "location.reload()")
     if not all(token in visible_surface for token in session_contract):
         raise AuditError("La recuperación o el reinicio seguro de Motores está incompleto.")
-    hidden_sections = ("Acerca de", "Seguridad", "Finanzas", "Alcance y calidad", "Fuentes cargadas", "function financeView()", "function scopeView()", "function sourcesView()")
+    hidden_sections = ("Seguridad", "Finanzas", "Alcance y calidad", "Fuentes cargadas", "function financeView()", "function scopeView()", "function sourcesView()")
     visible_extras = [token for token in hidden_sections if token in visible_surface]
     if visible_extras:
         raise AuditError("La interfaz mínima conserva secciones ocultas: " + ", ".join(visible_extras))
@@ -173,8 +177,9 @@ def audit_integration(root: Path = ROOT) -> dict[str, object]:
     if found:
         raise AuditError("Lógica obsoleta detectada: " + ", ".join(found))
     return {
-        "modulos_navegables": len(MODULES),
-        "modulos_exportables": len(MODULES),
+        "modulos_navegables": len(NAV_MODULES),
+        "modulos_exportables": len(REPORT_MODULES),
+        "esfuerzo_integrado_en_top": effort_integrated,
         "sesion_local_recuperable": True,
         "reinicio_local_confirmado": True,
         "pedido_woe": audit_woe_interface(root),

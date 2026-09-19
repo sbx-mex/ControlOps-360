@@ -1,10 +1,10 @@
 {
   "schema_version": 2,
   "project": "sbx-mex/ControlOps-360",
-  "version": "6.5.0",
-  "baseline": "6526844b64e7d22e71d5d5ac3d67a499e2661c6e",
-  "date": "2026-09-15",
-  "release": "pedido-woe-identidad-fechas-uso-diario-verde",
+  "version": "7.0.0",
+  "baseline": "25914bd8f337b78dd2169895dbd859b44b2d3896",
+  "date": "2026-09-19",
+  "release": "interfaz-rapida-accesos-directos-esfuerzo-integrado",
   "update_policy": {
     "replacement": "atomic",
     "python_gate": "scripts/auditar_proyecto.py",
@@ -30,11 +30,16 @@
     "baking",
     "top_products",
     "operational_effort",
+    "embedded_operational_effort",
+    "direct_app_context",
+    "tab_help_dialog",
+    "persistent_multi_select",
     "void_audit"
   ],
   "continuity_matrix": [
-    {"module":"Resumen 360°","latest_request":"Mostrar sólo las opciones disponibles","current":"Menú esencial","gap":"Ninguno","change":"Elimina bloques informativos y módulos sin respaldo","validation":"site tests y auditor Python"},
-    {"module":"Filtros","latest_request":"Selección rápida e intuitiva sin menús abiertos","current":"Cierre automático y búsqueda local","gap":"Ninguno","change":"Un menú abierto, cierre al elegir, Escape y clic exterior","validation":"site tests y auditor Python"},
+    {"module":"Resumen 360°","latest_request":"Menú limpio con acceso a Lay Out 2.0 y Code Brew","current":"Menú esencial y accesos directos con CeCo","gap":"Ninguno","change":"Retira Esfuerzo independiente y publica contexto directo para ambas aplicaciones","validation":"site tests y auditor Python"},
+    {"module":"Interfaz y ayuda","latest_request":"Menos texto, más intuición y detalles simplificados","current":"Densidad compacta y ayuda contextual","gap":"Ninguno","change":"Icono superior de ayuda y guías breves por pestaña","validation":"site tests y revisión visual"},
+    {"module":"Filtros","latest_request":"Selección múltiple sin cierre accidental y salida fácil","current":"Menú persistente con salida explícita","gap":"Ninguno","change":"Conserva el filtro abierto al marcar y cierra con Listo, Escape o clic exterior","validation":"site tests y auditor Python"},
     {"module":"Max & Min","latest_request":"Mantener selección, filtros y exportación","current":"Estable","gap":"Ninguna regresión aceptable","change":"Conservado","validation":"engine y export tests"},
     {"module":"Tendencia","latest_request":"Producto y días comparables","current":"Estable","gap":"Ninguna regresión aceptable","change":"Conservado","validation":"engine tests"},
     {"module":"Pedido WOE","latest_request":"Fechas libres, uso diario editable y PDF validado contra la tienda","current":"Flujo seguro separado por proveedor","gap":"Ninguno","change":"Lista próximas fechas activas, retira las cubiertas por tránsito, valida CeCo/nombre antes de incorporar y exporta uso aplicado más cantidad","validation":"24 escenarios Python, engine, transit, export y site tests"},
@@ -42,7 +47,7 @@
     {"module":"Peak Hour","latest_request":"48 franjas y promedios reales","current":"Estable","gap":"Ninguna regresión aceptable","change":"Conservado y conciliado con resumen","validation":"engine tests"},
     {"module":"Normalizados","latest_request":"Vasos, FHW y crema con filtros múltiples","current":"Estable","gap":"Ninguna regresión aceptable","change":"Conservado","validation":"engine y site tests"},
     {"module":"Ensamble y Horneo","latest_request":"Cruces, redondeo y trazabilidad","current":"Estable","gap":"Evidencia de join incompleta","change":"Cardinalidad y conteos verificables","validation":"ensamble audit y tests"},
-    {"module":"Top y Esfuerzo","latest_request":"Indicadores filtrables y consistentes","current":"Estable","gap":"Ninguna regresión aceptable","change":"Reagrupados bajo Indicadores","validation":"engine tests"},
+    {"module":"Top y Esfuerzo","latest_request":"Integrar Esfuerzo en Top y considerar sólo Cake Pop y Dona G&G","current":"Esfuerzo embebido como subpestaña","gap":"Ninguno","change":"Elimina la entrada independiente y restringe sus grupos operativos","validation":"engine, site tests y auditor Python"},
     {"module":"Auditoría","latest_request":"Motor_01 estable sin atribuciones erróneas","current":"ID de empleado reutilizado ya no bloquea","gap":"Ninguno","change":"Conserva el ticket como Partner no identificado","validation":"engine test y tres Motores reales"}
   ],
   "security": [

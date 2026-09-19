@@ -1,5 +1,15 @@
 # Historial consolidado
 
+## 7.0.0 · Interfaz rápida y Esfuerzo integrado
+
+- Reduce texto, espacios y controles repetidos en todas las pestañas para acelerar la validación visual.
+- Agrega ayuda contextual simplificada desde el icono `i` superior.
+- Mantiene abiertos los filtros múltiples durante la selección y permite salir con `Listo`, Escape o clic exterior.
+- Integra Esfuerzo Operativo dentro de Top Bebidas & Alimentos y limita el cálculo a Cake Pop y Dona G&G.
+- Retira Esfuerzo Operativo del menú principal sin perder sus exportaciones.
+- Incorpora accesos directos a Lay Out 2.0 y Code Brew con el CeCo actual en la URL y en un contexto local compartido.
+- Amplía las pruebas de integridad para proteger la nueva navegación, los filtros y los accesos directos.
+
 ## 6.5.0 · Pedido WOE con identidad segura
 
 - Remasteriza la programación del pedido con días activos, lista de fechas disponibles y selección rápida del siguiente pedido.
