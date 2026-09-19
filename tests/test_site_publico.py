@@ -62,8 +62,11 @@ class SitioPublicoTests(unittest.TestCase):
     def test_maxmin_is_selectable_compact_and_multi_filter(self):
         for token in ('data-multi-filter=', 'data-multi-search=', 'data-close-multi=', 'name="controlops-filters"', 'data-maxmin-select=', 'step="0.1"', 'PDF etiquetas', 'primary=i.sapName', "'outputView','Vista'", 'Pz / Caja'):
             self.assertIn(token, self.ui)
-        for token in ('quick-status', 'usage-unit-chip', 'Uso desde uso_ac', 'Selección múltiple'):
+        for token in ('usage-unit-chip', 'Uso desde uso_ac', 'Selección múltiple'):
             self.assertIn(token, self.ui)
+        maxmin = self.ui.split("function maxminView(){", 1)[1].split("function trendView(){", 1)[0]
+        self.assertNotIn('quick-status', maxmin)
+        self.assertNotIn('ALCANCE', maxmin)
         self.assertIn("state.openMultiFilter=name", self.ui)
         self.assertIn("state.openMultiFilter===name?' open':''", self.ui)
         self.assertIn("closeMultiFilters", self.ui)
@@ -116,8 +119,24 @@ class SitioPublicoTests(unittest.TestCase):
             self.assertIn(token, transit)
         self.assertIn('data-order-field="dailyUse"', order)
         self.assertIn("data-reset-order-use", order)
+        self.assertIn("dailyInput(i.minimum", order)
+        self.assertIn("oneDecimal(rawDaily)", order)
+        self.assertIn("orderEditFocus", self.ui)
         self.assertIn("row.quantityLabel", export)
         self.assertIn("Uso diario", export)
+
+    def test_peak_hour_is_positive_only_with_cycle_tasks(self):
+        peak = self.ui.split("function peakView(){", 1)[1].split("function normalView(){", 1)[0]
+        operations = (ROOT / "assets" / "operations.mjs").read_text()
+        cycle_tasks = (ROOT / "assets" / "cycle-tasks.mjs").read_text()
+        for token in ("r.activeSlots", "Tareas de ciclo", "00:00–14:00", "14:00–23:59", "FRECUENCIA"):
+            self.assertIn(token, peak)
+        for token in ("META RÁPIDA", "Mejor bloque + 5", "metric('Órdenes'", "metric('Bloque'", "metric('Impulso'"):
+            self.assertNotIn(token, peak)
+        for token in ("cycleFrequency", "peak(0,28)", "peak(28,48)", "Medias horas activas"):
+            self.assertIn(token, operations)
+        for token in ('"30"', '"20"', '"12"', '"8"', "Recolectar Loza"):
+            self.assertIn(token, cycle_tasks)
     def test_motor_session_is_recoverable_and_reset_is_explicit(self):
         for element_id in ("saveStatus", "resetButton", "resetConfirmation", "cancelResetButton", "confirmResetButton"):
             self.assertIn(element_id, self.parser.ids)
