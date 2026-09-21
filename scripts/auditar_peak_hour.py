@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Valida que Peak Hour y Tarea de Ciclo sean flujos separados e imprimibles."""
+"""Valida Peak Hour, PH Tendencia y Tarea de Ciclo como flujos operativos."""
 
 from __future__ import annotations
 
@@ -39,9 +39,12 @@ def audit(root: Path = ROOT) -> dict[str, object]:
     peak = ui.split("function peakView(){", 1)[1].split("function normalView(){", 1)[0]
 
     ui_contract = (
-        "tabs('peak',['Peak Hour','Tarea de Ciclo'])",
+        "tabs('peak',['Peak Hour','PH Tendencia','Tarea de Ciclo'])",
         "Tabla comparativa",
         "Time Period",
+        "MISMO DÍA · DIFERENTES SEMANAS",
+        "Dif. sem. anterior",
+        'data-ph-trend-day',
         'data-peak-basis="average"',
         "data-peak-real",
         "data-cycle-day",
@@ -50,6 +53,8 @@ def audit(root: Path = ROOT) -> dict[str, object]:
     )
     engine_contract = (
         "peakPlanningRows",
+        "peakTrend",
+        "dateSlots",
         "planningWeekDates",
         "cyclePlan",
         "latestWeekday",
@@ -58,15 +63,18 @@ def audit(root: Path = ROOT) -> dict[str, object]:
     )
     pdf_contract = (
         "createPeakHourPdf",
+        "createPeakTrendPdf",
         "createCycleDayPdf",
         "peak-hour-plan",
+        "peak-trend",
         "cycle-day-plan",
         "PEAK HOUR · PLAN SEMANAL",
+        "PH TENDENCIA · MISMO DÍA ENTRE SEMANAS",
         "PEAK HOUR · TIME PERIOD",
         "48 PERIODOS · SÓLO TX MAYOR A CERO",
         "TAREA DE CICLO · PLAN DEL DÍA",
     )
-    style_contract = (".peak-compare", ".peak-real", ".cycle-days", ".cycle-workspace", ".cycle-frequency")
+    style_contract = (".peak-compare", ".peak-real", ".ph-trend-kpis", ".ph-trend-matrix", ".trend-delta", ".cycle-days", ".cycle-workspace", ".cycle-frequency")
     missing = [token for token in ui_contract if token not in peak]
     missing += [token for token in engine_contract if token not in operations]
     missing += [token for token in pdf_contract if token not in export]
@@ -79,9 +87,12 @@ def audit(root: Path = ROOT) -> dict[str, object]:
     catalog = _cycle_catalog(root)
     return {
         "estado": "VERDE",
-        "vistas": ["Peak Hour", "Tarea de Ciclo"],
-        "pdf_carta": {"peak_hour_paginas": 2, "tarea_ciclo_paginas": 1},
+        "vistas": ["Peak Hour", "PH Tendencia", "Tarea de Ciclo"],
+        "pdf_carta": {"peak_hour_paginas": 2, "ph_tendencia_paginas": 1, "tarea_ciclo_paginas": 1},
         "time_period_una_pagina": True,
+        "mismo_dia_entre_semanas": True,
+        "diferencia_semana_anterior": True,
+        "peak_cuatro_medias_horas": True,
         "tareas": sum(len(tasks) for tasks in catalog.values()),
         "frecuencias": [30, 20, 12, 8],
         "promedio_prioritario": True,
@@ -96,7 +107,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         result = audit()
-        print(json.dumps(result, ensure_ascii=False, indent=2) if args.json else "VERDE · Peak Hour + Tarea de Ciclo")
+        print(json.dumps(result, ensure_ascii=False, indent=2) if args.json else "VERDE · Peak Hour + PH Tendencia + Tarea de Ciclo")
         return 0
     except Exception as error:  # noqa: BLE001 - la puerta debe fallar cerrada.
         print(json.dumps({"estado": "ROJO", "error": str(error)}, ensure_ascii=False), file=sys.stderr)

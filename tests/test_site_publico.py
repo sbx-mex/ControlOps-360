@@ -130,14 +130,14 @@ class SitioPublicoTests(unittest.TestCase):
         operations = (ROOT / "assets" / "operations.mjs").read_text()
         cycle_tasks = (ROOT / "assets" / "cycle-tasks.mjs").read_text()
         export = (ROOT / "assets" / "export.mjs").read_text()
-        for token in ("tabs('peak',['Peak Hour','Tarea de Ciclo'])", "Tabla comparativa", "Time Period", 'data-peak-real', 'data-cycle-activity', 'data-peak-basis="average"', "00:00–14:00", "14:00–23:59"):
+        for token in ("tabs('peak',['Peak Hour','PH Tendencia','Tarea de Ciclo'])", "Tabla comparativa", "Time Period", "MISMO DÍA · DIFERENTES SEMANAS", "Dif. sem. anterior", 'data-ph-trend-day', 'data-peak-real', 'data-cycle-activity', 'data-peak-basis="average"', "00:00–14:00", "14:00–23:59"):
             self.assertIn(token, peak)
         for token in ("META RÁPIDA", "Mejor bloque + 5", "metric('Órdenes'", "metric('Bloque'", "metric('Impulso'"):
             self.assertNotIn(token, peak)
         self.assertNotIn("48 medias horas", peak)
-        for token in ("cycleFrequency", "peakPlanningRows", "planningWeekDates", "cyclePlan", "latestWeekday"):
+        for token in ("cycleFrequency", "peakTrend", "dateSlots", "peakPlanningRows", "planningWeekDates", "cyclePlan", "latestWeekday"):
             self.assertIn(token, operations)
-        for token in ("peak-hour-plan", "cycle-day-plan", "PEAK HOUR · PLAN SEMANAL", "TAREA DE CICLO · PLAN DEL DÍA"):
+        for token in ("peak-hour-plan", "peak-trend", "cycle-day-plan", "PEAK HOUR · PLAN SEMANAL", "PH TENDENCIA · MISMO DÍA ENTRE SEMANAS", "TAREA DE CICLO · PLAN DEL DÍA"):
             self.assertIn(token, export)
         for token in ('"30"', '"20"', '"12"', '"8"', "Recolectar Loza"):
             self.assertIn(token, cycle_tasks)
