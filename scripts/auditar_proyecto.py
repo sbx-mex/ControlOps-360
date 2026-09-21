@@ -180,10 +180,10 @@ def audit_integration(root: Path = ROOT) -> dict[str, object]:
     if not all(token in order_view for token in ("dailyInput(i.minimum", "oneDecimal(rawDaily)", 'data-order-field="dailyUse"')):
         raise AuditError("Pedido WOE no aplica edición rápida de uso diario a una decimal.")
     peak_view = ui.split("function peakView(){", 1)[1].split("function normalView(){", 1)[0]
-    peak_contract = ("tabs('peak',['Peak Hour','Tarea de Ciclo'])", "Tabla comparativa", "Time Period", "data-peak-real", "data-cycle-activity", "00:00–14:00", "14:00–23:59")
-    peak_engine_contract = ("cycleFrequency", "peakPlanningRows", "planningWeekDates", "cyclePlan", "peakFor(days,0,28)", "peakFor(days,28,48)")
+    peak_contract = ("tabs('peak',['Peak Hour','PH Tendencia','Tarea de Ciclo'])", "Tabla comparativa", "Time Period", "MISMO DÍA · DIFERENTES SEMANAS", "Dif. sem. anterior", "data-ph-trend-day", "data-peak-real", "data-cycle-activity", "00:00–14:00", "14:00–23:59")
+    peak_engine_contract = ("cycleFrequency", "peakTrend", "dateSlots", "peakPlanningRows", "planningWeekDates", "cyclePlan", "peakFor(days,0,28)", "peakFor(days,28,48)")
     if not all(token in peak_view for token in peak_contract) or not all(token in operations for token in peak_engine_contract):
-        raise AuditError("Peak Hour o Tarea de Ciclo no cumplen la experiencia separada.")
+        raise AuditError("Peak Hour, PH Tendencia o Tarea de Ciclo no cumplen la experiencia separada.")
     if any(token in peak_view for token in ("META RÁPIDA", "Mejor bloque + 5", "metric('Órdenes'", "metric('Bloque'", "metric('Impulso'")):
         raise AuditError("Peak Hour conserva indicadores retirados.")
     cycle_tasks = _read("assets/cycle-tasks.mjs", root)

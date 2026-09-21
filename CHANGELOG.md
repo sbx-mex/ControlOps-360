@@ -1,5 +1,14 @@
 # Historial consolidado
 
+## 7.4.0 · PH Tendencia y mejora continua
+
+- Divide Peak Hour en tres subpestañas intencionales: `Peak Hour`, `PH Tendencia` y `Tarea de Ciclo`.
+- Compara el mismo día de la semana entre hasta ocho semanas con cada `Time Period` de 30 minutos.
+- Calcula Peak AM y PM por cuatro medias horas consecutivas y muestra la diferencia contra la semana anterior.
+- Señala la media hora con mayor caída o avance para convertir la lectura en una acción concreta.
+- Añade resúmenes operativos a las tres subpestañas y exportación Excel/PDF propia para PH Tendencia.
+- Amplía la puerta Python, las pruebas del motor, sitio y exportación para exigir la experiencia completa.
+
 ## 7.3.1 · Time Period completo en la segunda página
 
 - Conserva sin cambios la primera hoja comparativa de Peak Hour.
