@@ -107,13 +107,13 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertIn("orderTransitFor(provider)", order)
         self.assertIn("Cambiar proveedor", order)
 
-    def test_order_validates_store_identity_and_editable_daily_use(self):
+    def test_order_keeps_store_identity_review_non_blocking_and_editable_daily_use(self):
         order = self.ui.split("function orderView(){", 1)[1].split("function peakView(){", 1)[0]
         transit = (ROOT / "assets" / "transit.mjs").read_text()
         export = (ROOT / "assets" / "export.mjs").read_text()
-        for token in ("TIENDA ACTIVA DE LOS MOTORES", "LECTURA APROBADA", "PDF RECHAZADO"):
+        for token in ("TIENDA ACTIVA DE LOS MOTORES", "VALIDA ESTE PEDIDO", "Continuar con ${accepted.length} pedido"):
             self.assertIn(token, self.ui)
-        for token in ("transitIdentityVerified", "pruneUnverifiedTransitOrders", "necesita validarse de nuevo por seguridad"):
+        for token in ("transitOrderAccepted", "upgradeStoredTransitOrders", "order.confirmedByUser=true", "no bloquea tu carga"):
             self.assertIn(token, self.ui)
         for token in ("validateTransitStore", "similarStoreName", "storeCeco", "storeName"):
             self.assertIn(token, transit)
@@ -124,6 +124,11 @@ class SitioPublicoTests(unittest.TestCase):
         self.assertIn("orderEditFocus", self.ui)
         self.assertIn("row.quantityLabel", export)
         self.assertIn("Uso diario", export)
+
+    def test_order_timeline_summarizes_today_transit_and_coverage(self):
+        order = self.ui.split("function orderView(){", 1)[1].split("function peakView(){", 1)[0]
+        for token in ("order-timeline", "DÍA ACTUAL", "PEDIDO EN TRÁNSITO", "Fecha pedido", "COBERTURA FINAL"):
+            self.assertIn(token, order)
 
     def test_peak_hour_and_cycle_tasks_are_separate_printable_experiences(self):
         peak = self.ui.split("function peakView(){", 1)[1].split("function normalView(){", 1)[0]

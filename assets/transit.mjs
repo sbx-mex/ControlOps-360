@@ -98,13 +98,13 @@ export function parseTransitLines(lines, sourceName = 'pedido.pdf') {
 
 export function validateTransitStore(order, expectedStore = {}) {
   const expectedCeco = compactCode(expectedStore.ceco), pdfCeco = compactCode(order.storeCeco), expectedName = String(expectedStore.name || '').trim(), pdfName = String(order.storeName || '').trim();
-  if (!expectedCeco && !expectedName) throw new Error('Carga primero los Motores para identificar la tienda.');
-  if (!pdfCeco && !pdfName) throw new Error('El PDF no identifica un CeCo ni un nombre de tienda verificable.');
-  let cecoMatch=false,nameMatch=false;
-  if (pdfCeco && expectedCeco) {if (pdfCeco !== expectedCeco) throw new Error(`El PDF corresponde al CeCo ${pdfCeco}, no al CeCo ${expectedCeco} de los Motores.`);cecoMatch=true;}
-  if (pdfName && expectedName) {if (!similarStoreName(pdfName, expectedName)) throw new Error(`El PDF corresponde a “${pdfName}”, no a “${expectedName}”.`);nameMatch=true;}
-  if (!cecoMatch&&!nameMatch) throw new Error('El PDF no contiene una identidad comparable con el CeCo o nombre de los Motores.');
-  return {cecoMatch,nameMatch};
+  const reasons=[];let cecoMatch=false,nameMatch=false;
+  if (!expectedCeco&&!expectedName) reasons.push('Los Motores no informan una tienda para comparar.');
+  if (!pdfCeco&&!pdfName) reasons.push('El PDF no informa CeCo ni un nombre de tienda reconocible.');
+  if (pdfCeco&&expectedCeco) {cecoMatch=pdfCeco===expectedCeco;if(!cecoMatch)reasons.push(`El PDF indica CeCo ${pdfCeco}; los Motores muestran ${expectedCeco}.`);}
+  if (pdfName&&expectedName) {nameMatch=similarStoreName(pdfName,expectedName);if(!nameMatch)reasons.push(`El PDF indica “${pdfName}”; los Motores muestran “${expectedName}”.`);}
+  if(!cecoMatch&&!nameMatch&&!reasons.length)reasons.push('No hay un dato comparable entre el PDF y los Motores.');
+  return {cecoMatch,nameMatch,status:reasons.length?'review':'verified',reasons};
 }
 
 export function validateTransitOrder(order, today, usedPurchaseOrders = new Set(), usedFingerprints = new Set(), expectedStore = null) {

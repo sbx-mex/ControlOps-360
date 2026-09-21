@@ -71,6 +71,40 @@ def similar_store_name(left: object, right: object) -> bool:
     return matches / max(len(a), len(b)) >= 0.6
 
 
+def review_store_identity(
+    pdf_ceco: object,
+    pdf_name: object,
+    motor_ceco: object,
+    motor_name: object,
+) -> dict[str, object]:
+    """Replica la decisión del navegador: la identidad avisa, pero no bloquea."""
+    pdf_ceco_clean, motor_ceco_clean = compact_code(pdf_ceco), compact_code(motor_ceco)
+    pdf_name_clean, motor_name_clean = str(pdf_name or "").strip(), str(motor_name or "").strip()
+    reasons: list[str] = []
+    ceco_match = False
+    name_match = False
+    if not motor_ceco_clean and not motor_name_clean:
+        reasons.append("Motor sin tienda comparable")
+    if not pdf_ceco_clean and not pdf_name_clean:
+        reasons.append("PDF sin identidad reconocible")
+    if pdf_ceco_clean and motor_ceco_clean:
+        ceco_match = pdf_ceco_clean == motor_ceco_clean
+        if not ceco_match:
+            reasons.append("CeCo diferente")
+    if pdf_name_clean and motor_name_clean:
+        name_match = similar_store_name(pdf_name_clean, motor_name_clean)
+        if not name_match:
+            reasons.append("Nombre diferente")
+    if not ceco_match and not name_match and not reasons:
+        reasons.append("Sin dato comparable")
+    return {
+        "ceco_match": ceco_match,
+        "name_match": name_match,
+        "status": "review" if reasons else "verified",
+        "reasons": reasons,
+    }
+
+
 def available_order_dates(today: str, weekdays: list[int], occupied: list[str], limit: int = 8) -> list[str]:
     start = date.fromisoformat(today)
     active = {day for day in weekdays if 0 <= day <= 6}
@@ -163,6 +197,10 @@ def scenario_matrix() -> list[str]:
         "nombre Luna Parc compatible": similar_store_name("SB_Luna_Parc", "Luna Parc"),
         "abreviación Gal Perinorte compatible": similar_store_name("SB_Gal_Perinorte", "Galerías Perinor"),
         "nombre de otra tienda rechazado": not similar_store_name("SB_Luna_Parc", "Galerías Perinor"),
+        "nombre distinto permite revisión": review_store_identity("", "Galerías Perinor", "38368", "SB_Luna_Parc")["status"] == "review",
+        "CeCo distinto permite revisión": review_store_identity("38894", "", "38368", "SB_Luna_Parc")["status"] == "review",
+        "PDF sin identidad permite revisión": review_store_identity("", "", "38368", "SB_Luna_Parc")["status"] == "review",
+        "nombre SB se valida automáticamente": review_store_identity("", "Luna Parc", "38368", "SB_Luna_Parc")["status"] == "verified",
         "miércoles y sábado calculados": available_order_dates("2026-09-15", [2, 5], [], 3) == ["2026-09-16", "2026-09-19", "2026-09-23"],
         "miércoles en tránsito se retira": available_order_dates("2026-09-15", [2, 5], ["2026-09-16"], 3) == ["2026-09-19", "2026-09-23", "2026-09-26"],
     }
@@ -238,9 +276,11 @@ def audit_interface(root: Path = ROOT) -> dict[str, bool]:
         "transito_por_proveedor": "filter(order=>providerAlias(order.providerAlias||order.provider)===providerAlias(provider))" in ui and "orderTransitFor(provider)" in order,
         "pdf_transito_local": "parseOrderPdf" in ui and (root / "assets" / "vendor" / "pdf.min.mjs").is_file(),
         "duplicados_bloqueados": "usedPurchaseOrders" in transit,
-        "identidad_tienda_validada": all(token in transit for token in ("validateTransitStore", "similarStoreName", "storeCeco", "storeName")) and "motorIdentity" in ui,
-        "transito_anterior_revalidado": all(token in ui for token in ("transitIdentityVerified", "pruneUnverifiedTransitOrders", "necesita validarse de nuevo por seguridad")),
-        "confirmacion_antes_de_incorporar": all(token in ui for token in ("TIENDA ACTIVA DE LOS MOTORES", "LECTURA APROBADA", "PDF RECHAZADO", "No se incorporó al tránsito")),
+        "identidad_tienda_informativa": all(token in transit for token in ("validateTransitStore", "similarStoreName", "status:reasons.length?'review':'verified'")) and "motorIdentity" in ui,
+        "diferencia_no_bloquea_carga": "order.confirmedByUser=true" in ui and "La diferencia de nombre o CeCo sólo genera aviso; no bloquea tu carga." in ui,
+        "confirmacion_grande_por_pedido": all(token in ui for token in ("transit-confirm-card", "VALIDA ESTE PEDIDO", "Continuar con ${accepted.length} pedido")),
+        "linea_tiempo_resumida": all(token in order for token in ("order-timeline", "DÍA ACTUAL", "PEDIDO EN TRÁNSITO", "COBERTURA FINAL", "Fecha pedido")),
+        "transito_guardado_recuperable": all(token in ui for token in ("transitOrderAccepted", "upgradeStoredTransitOrders", "confirmedByUser")),
         "uso_diario_editable": 'data-order-field="dailyUse"' in order and "data-reset-order-use" in order,
         "pdf_con_cantidad_y_uso": all(token in export for token in ("CANTIDAD", "A PEDIR", "row.quantityLabel", "Uso diario", "row.dailyUse")),
         "exportacion_pedagogica": "order-woe" in export,
