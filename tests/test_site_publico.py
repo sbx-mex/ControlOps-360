@@ -165,7 +165,7 @@ class SitioPublicoTests(unittest.TestCase):
         audit = self.ui.split("function auditView(){", 1)[1].split("function navigationView(", 1)[0]
         self.assertNotIn("tabs('audit'", audit)
         self.assertNotIn("Negativas", audit)
-        for token in ("multiFilter('reasons','Motivos'", "multiFilter('partners','Partners'", "data-audit-ticket=", "DESGLOSE DEL TICKET", "Concentración por partner"):
+        for token in ("multiFilter('reasons','Motivos'", "multiFilter('partners','Partners'", "data-audit-ticket=", "LÍNEAS DEL TICKET · MOTOR 1", "Void exclusivo", "Riesgo de borrado", "Ticket reabierto", "Concentración por partner"):
             self.assertIn(token, self.ui)
     def test_no_diagnostics_or_demo(self):
         for token in ("Exportar diagnóstico", "demoButton", "archivo_patron"):
