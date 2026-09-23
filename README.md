@@ -11,6 +11,16 @@ Multiherramienta operativa de Starbucks que procesa motores Excel en el navegado
 - Operación: Peak Hour, Normalizados, Ensamble y Horneo.
 - Indicadores: Top Bebidas & Alimentos integra Esfuerzo Operativo exclusivamente para Cake Pop y Dona G&G.
 - Control: Auditoría de Voids por ticket, partner, puesto, motivo y riesgo vinculado.
+
+### Auditoría de Void por cheque
+
+Carga Motor 1 y Motor 2 externos. En **Voids · Auditoría**, cada cheque aparece una vez y puede abrirse para ver todas sus líneas de `void_ac`, incluidos modificadores con importe cero. La clasificación usa el total negativo de `ticket_ac` para **Void exclusivo**. Una línea negativa con total de ticket positivo es **Riesgo de borrado**; cuando `ticket_ac` no incluye ese cheque, un neto positivo de `pagos_ac` muestra el mismo riesgo como **inferencia por pagos**, identificada en pantalla y en Excel. Sin total o pago concluyente figura **Sin cierre verificado**. Un motivo que inicia con `r` agrega **Ticket reabierto** de forma independiente.
+
+Motor 2 aporta uso y stock, pero no líneas de venta ni totales de ticket. El desglose es la evidencia Void disponible en Motor 1, no una reproducción íntegra del recibo. Se puede cotejar el motor sin modificar los XLSM:
+
+```bash
+python scripts/auditar_void_motor.py Motor_01_Auditoria_Transacciones.xlsm Motor_02_Uso_Stock.xlsm
+```
 - Exportación: Excel y PDF del módulo activo, con pie de confidencialidad uniforme.
 - Filtros: selección múltiple persistente, búsqueda en listas largas y salida clara con `Listo`, Escape o clic exterior.
 - Pedido WOE: lista de próximas fechas reales según los días activos; una fecha desaparece cuando ya existe un PDF en tránsito y el botón `Usar siguiente` acelera la captura.

@@ -1,5 +1,13 @@
 # Historial consolidado
 
+## 7.4.1 · Auditoría Void por cheque
+
+- Confirma Void exclusivo únicamente cuando el total del cheque en Motor 1 es negativo.
+- Distingue líneas negativas dentro de un cheque positivo; si falta el total, identifica la inferencia por pagos positivos.
+- Segmenta motivos que comienzan con `r` como ticket reabierto, independiente del Void.
+- Muestra cada línea `void_ac` con hora, producto, cantidad, importe y motivo; exporta clasificación y detalle.
+- Añade una reconciliación Python de los motores externos sin incorporarlos al repositorio.
+
 ## 7.4.0 · PH Tendencia y mejora continua
 
 - Divide Peak Hour en tres subpestañas intencionales: `Peak Hour`, `PH Tendencia` y `Tarea de Ciclo`.
