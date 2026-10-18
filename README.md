@@ -2,7 +2,21 @@
 
 Multiherramienta operativa de Starbucks que procesa motores Excel en el navegador, valida sus cruces y activa únicamente las herramientas compatibles con la tienda.
 
-## Qué integra la versión 7.4.0
+## Motores y manual · versión 7.5.0
+
+El botón **Motores y manual** está disponible antes y después de cargar datos. Ofrece tres plantillas XLSM originales y el manual PDF; las descargas son locales al proyecto y no agregan servicios externos. Las plantillas se entregan sin registros operativos, con macros y Power Query conservados. Pueden mostrar un CeCo de referencia: verifica el de tu tienda al terminar la actualización.
+
+1. Descarga una vez y crea la carpeta **Control Ops 360 · tu CeCo** en la computadora de Back.
+2. Con Excel cerrado: clic derecho en cada archivo → **Propiedades → Desbloquear → Aplicar**, si Windows muestra la opción.
+3. Abre cada archivo en Excel de escritorio de Back y pulsa **ACTUALIZAR TODO en la portada del motor**. Ese botón acumula el histórico; no lo sustituyas por la actualización genérica de conexiones de Excel.
+4. Espera **Actualización terminada**, confirma el mismo CeCo, registros y fechas, guarda y espera la sincronización de OneDrive si lo usas.
+5. Carga los Excel guardados desde el celular de tienda u otro equipo autorizado. El portal no ejecuta macros ni se conecta al SQL de Back.
+
+Las consultas de tickets, Voids, pagos y detalle de venta incluyen una ventana de 20 días; otras fuentes dependen de la disponibilidad de Back. Conserva y actualiza los mismos archivos para acumular historia sin duplicados. Una descarga inicial no recupera el histórico; un cambio de CeCo reinicia el acumulado. La guía incluye tres comprobaciones manuales antes de cargar. No sustituyen las validaciones automáticas del portal. Una plantilla original sin actualizar se rechaza con instrucciones para prepararla.
+
+La revisión Python comprueba integridad ZIP, SHA-256 de cada descarga, 21 tablas, ausencia de registros operativos, presencia de macros/consultas y enlaces con nombres correctos. La lista permitida contiene únicamente los tres XLSM originales; cualquier archivo operativo adicional o una plantilla modificada hace fallar la auditoría. Las consultas SQL y los botones VBA requieren una prueba real en Excel de Back: las comprobaciones estáticas no ejecutan esa conexión.
+
+## Funciones conservadas
 
 - Resumen 360°: muestra sólo las herramientas habilitadas y agrega accesos directos a Lay Out 2.0 y Code Brew con el CeCo actual en URL y contexto local compartido.
 - Interfaz rápida: menos texto, jerarquía visual compacta, acciones visibles y ayuda contextual desde el icono `i` de cada pestaña.
@@ -41,7 +55,11 @@ Cada Motor operativo debe identificar un único CeCo. La selección compara arch
 
 Los módulos de parámetros, lectura Excel, exportación y tránsito se cargan bajo demanda. La puerta Python mide el grafo inicial y evita que una actualización vuelva a cargar esos componentes antes de necesitarlos. La recuperación usa IndexedDB y solicita almacenamiento persistente cuando el navegador lo permite; no usa cookies ni conexiones de red.
 
-Los parámetros de referencia están versionados en `assets/parameters.mjs`. El repositorio y el ZIP no contienen ventas, inventarios, transacciones ni libros operativos.
+Los parámetros de referencia están versionados en `assets/parameters.mjs`. El repositorio y el ZIP no contienen registros de ventas, inventarios o transacciones. Sólo se permiten las tres plantillas originales verificadas de `downloads/motores/`.
+
+## Aplicar el ZIP de actualización
+
+Extrae el ZIP y reemplaza sus archivos en la raíz de `sbx-mex/ControlOps-360`, conservando las carpetas `assets`, `downloads`, `scripts`, `tests` y `.github`, además de `.gitignore`. El resto del proyecto se conserva. Incluye las modificaciones del workflow para que la puerta Python permita sólo las plantillas originales vacías. La actualización parte de `146434035f4614d4f1045c867727bcb1fddc2501`.
 
 ## Puerta de actualización
 
@@ -60,8 +78,8 @@ python scripts/validar_exportacion_max_min.py /tmp/max_min_validacion.xlsx
 El ZIP reproducible se crea y se vuelve a auditar con:
 
 ```bash
-python scripts/crear_zip_seguro.py /tmp/ControlOps-360-v7.4.0.zip
-python scripts/auditar_proyecto.py --zip /tmp/ControlOps-360-v7.4.0.zip --json
+python scripts/crear_zip_seguro.py /tmp/ControlOps-360-v7.5.0.zip
+python scripts/auditar_proyecto.py --zip /tmp/ControlOps-360-v7.5.0.zip --json
 ```
 
 El generador excluye cualquier `ZIP_MANIFEST.sha256` de una entrega anterior y crea exactamente uno nuevo. Por ello puede ejecutarse repetidamente sin duplicar rutas.

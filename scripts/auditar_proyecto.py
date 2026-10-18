@@ -14,6 +14,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 try:
+    from .auditar_descargas import APPROVED_TEMPLATES, audit_downloads
     from .auditar_ensamble import audit_interface as audit_assembly_interface
     from .auditar_ensamble import audit_table as audit_assembly_table
     from .auditar_pedido_woe import audit_catalog as audit_woe_catalog
@@ -21,6 +22,7 @@ try:
     from .auditar_peak_hour import audit as audit_peak_hour
     from .auditar_rendimiento import audit as audit_performance
 except ImportError:  # Ejecución directa: python scripts/auditar_proyecto.py
+    from auditar_descargas import APPROVED_TEMPLATES, audit_downloads
     from auditar_ensamble import audit_interface as audit_assembly_interface
     from auditar_ensamble import audit_table as audit_assembly_table
     from auditar_pedido_woe import audit_catalog as audit_woe_catalog
@@ -53,6 +55,9 @@ REQUIRED_FILES = {
     "assets/styles.css",
     "assets/transit.mjs",
     "scripts/auditar_proyecto.py",
+    "scripts/auditar_descargas.py",
+    "assets/resources.css",
+    "assets/resources.mjs",
     "scripts/auditar_peak_hour.py",
     "scripts/auditar_rendimiento.py",
     "scripts/actualizar_tareas_ciclo.py",
@@ -107,9 +112,13 @@ def audit_structure(root: Path = ROOT) -> dict[str, object]:
 
 def audit_security(root: Path = ROOT) -> dict[str, object]:
     files = _project_files(root)
-    data_files = [str(path.relative_to(root)) for path in files if path.suffix.lower() in DATA_SUFFIXES]
+    data_files = [str(path.relative_to(root)) for path in files if path.suffix.lower() in DATA_SUFFIXES and path.relative_to(root).as_posix() not in APPROVED_TEMPLATES]
     if data_files:
         raise AuditError("Hay bases operativas en el proyecto: " + ", ".join(data_files))
+    try:
+        audit_downloads(root)
+    except AssertionError as error:
+        raise AuditError(str(error)) from error
     dangerous = [
         str(path.relative_to(root))
         for path in files
@@ -221,6 +230,7 @@ def audit_project(root: Path = ROOT) -> dict[str, object]:
         "integracion_360": audit_integration(root),
         "cruces": audit_crosses(root),
         "rendimiento": audit_performance(root),
+        "descargas": audit_downloads(root),
     }
 
 
@@ -268,7 +278,7 @@ def audit_zip(path: Path) -> dict[str, object]:
             if entry.file_size > 1024 * 1024 and entry.compress_size and entry.file_size / entry.compress_size > 200:
                 raise AuditError(f"Relación de compresión sospechosa: {raw}")
         archive_root, logical = _logical_names(entries)
-        data = sorted(name for name in logical if Path(name).suffix.lower() in DATA_SUFFIXES)
+        data = sorted(name for name in logical if Path(name).suffix.lower() in DATA_SUFFIXES and name not in APPROVED_TEMPLATES)
         if data:
             raise AuditError("El ZIP contiene bases operativas: " + ", ".join(data))
         sensitive = sorted(name for name in logical if Path(name).name.lower() in {".env", "id_rsa", "id_ed25519"} or Path(name).suffix.lower() in {".pem", ".p12", ".pfx", ".key"})

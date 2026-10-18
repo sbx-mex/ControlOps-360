@@ -15,11 +15,11 @@ Control Ops 360° opera con privacidad desde diseño: los Excel y PDF se leen de
 - Sesión recuperable en IndexedDB: conserva únicamente la representación procesada de los Motores dentro del mismo navegador y la reemplaza en una transacción local.
 - Reinicio confirmado: `Reiniciar datos` borra la sesión recuperable y los ajustes de Control Ops antes de recargar una pantalla limpia.
 - Exportación con validación de contenido, nombre seguro, límite de tamaño y marca confidencial.
-- ZIP determinista sin enlaces, rutas relativas inseguras, bases operativas ni archivos sensibles; cada archivo se verifica contra `ZIP_MANIFEST.sha256`.
+- ZIP determinista sin enlaces, rutas relativas inseguras, registros operativos ni archivos sensibles; cada archivo se verifica contra `ZIP_MANIFEST.sha256`.
 
 ## No publicar
 
-- Excel, CSV o históricos reales de tienda.
+- Excel actualizados, CSV o históricos reales de tienda. Las únicas excepciones son las tres plantillas iniciales de `downloads/motores/`, sin registros operativos y con SHA-256 fijado en `scripts/auditar_descargas.py`. Si se actualiza una copia con datos o cambia su contenido, la auditoría debe fallar.
 - Ventas, inventarios, transacciones, colaboradores o CeCo asociados con resultados.
 - Exportaciones generadas a partir de información operativa.
 - Tokens, credenciales, correos, rutas personales o llaves privadas.

@@ -11,6 +11,7 @@
 <title>Control Ops 360°</title>
 <link rel="icon" href="assets/control-ops-360.svg" type="image/svg+xml">
 <link rel="stylesheet" href="assets/styles.css">
+<link rel="stylesheet" href="assets/resources.css">
 </head>
 <body>
 <a class="skip-link" href="#content">Ir al contenido</a>
@@ -18,7 +19,7 @@
  <button class="brand" id="homeButton" aria-label="Ir al menú principal"><img src="assets/control-ops-360.svg" width="48" height="48" alt=""><span class="brand-copy"><small>STARBUCKS OPERATIONS</small><span>Control Ops <b>360°</b></span></span></button>
  <div id="storeBadge" class="store-badge" hidden></div>
  <div class="privacy-chip" title="Los archivos se procesan y conservan sólo en este navegador"><span aria-hidden="true">◆</span> Proceso local</div>
- <div class="top-actions"><span id="saveStatus" class="save-status" role="status" aria-live="polite" hidden></span><button id="resetButton" class="quiet" title="Borrar la sesión local y comenzar de nuevo" hidden>Reiniciar datos</button><button id="uploadButton" class="primary">＋ Cargar Excel</button></div>
+ <div class="top-actions"><button class="quiet" type="button" data-open-resources aria-haspopup="dialog" aria-controls="resourcesDialog">Motores y manual</button><span id="saveStatus" class="save-status" role="status" aria-live="polite" hidden></span><button id="resetButton" class="quiet" title="Borrar la sesión local y comenzar de nuevo" hidden>Reiniciar datos</button><button id="uploadButton" class="primary">＋ Cargar Excel</button></div>
  <input id="fileInput" type="file" accept=".xlsm,.xlsx,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden>
 </header>
 <div id="loading" class="loading" role="status" aria-live="polite" hidden><div class="loading-card"><div class="spinner"></div><h2>Carga segura</h2><p id="progressText">Validando…</p></div></div>
@@ -26,8 +27,9 @@
  <section id="emptyState" class="welcome">
   <img class="welcome-mark" src="assets/control-ops-360.svg" width="92" height="92" alt="Control Ops 360°">
   <span class="eyebrow">STARBUCKS · MULTIHERRAMIENTA OPERATIVA</span><h1>Tu operación.<br><span>Una sola dirección.</span></h1>
-  <p class="welcome-copy">Carga Motores compatibles. La sesión queda protegida en este equipo.</p>
+  <p class="welcome-copy">Carga Motores compatibles, actualizados y guardados en Back.</p>
   <button id="dropZone" class="drop-zone" type="button"><span class="file-icon" aria-hidden="true">⇧</span><strong>Cargar Excel</strong><span>XLSM de tienda · XLSX de parámetros</span></button>
+  <div class="resources-entry"><div><strong>¿Primera vez?</strong><span>Tres motores y una guía para empezar.</span></div><button type="button" data-open-resources aria-haspopup="dialog" aria-controls="resourcesDialog">Descargar motores y manual <span aria-hidden="true">↗</span></button></div>
  </section>
  <section id="workspace" class="workspace" hidden>
   <aside class="sidebar"><span class="sidebar-label">HERRAMIENTAS</span><nav id="moduleNav" aria-label="Herramientas"></nav></aside>
@@ -37,6 +39,25 @@
   </div>
  </section>
 </main>
+<dialog id="resourcesDialog" class="resources-dialog" aria-labelledby="resourcesTitle" aria-describedby="resourcesIntro">
+ <header class="resources-heading"><div><span class="eyebrow">DESCARGAS · CONTROL OPS 360°</span><h2 id="resourcesTitle">Prepara tus motores.</h2></div><button id="closeResourcesButton" type="button" aria-label="Cerrar descargas" autofocus>✕</button></header>
+ <p id="resourcesIntro">Descarga una vez. Actualiza desde la computadora de Back de tu tienda.</p>
+ <div class="motor-downloads">
+  <article><span class="motor-number">01</span><div><h3>Transacciones</h3><p>Tickets, pagos, descuentos y Voids.</p><a href="downloads/motores/Motor_01_Auditoria_Transacciones.xlsm" download="Motor_01_Auditoria_Transacciones.xlsm" type="application/vnd.ms-excel.sheet.macroEnabled.12">Descargar Motor 01 <span aria-hidden="true">↓</span></a><small>Excel con macros · 1.2 MB</small></div></article>
+  <article><span class="motor-number">02</span><div><h3>Uso y stock</h3><p>Consumo de ingredientes y catálogo de inventario.</p><a href="downloads/motores/Motor_02_Uso_Stock.xlsm" download="Motor_02_Uso_Stock.xlsm" type="application/vnd.ms-excel.sheet.macroEnabled.12">Descargar Motor 02 <span aria-hidden="true">↓</span></a><small>Excel con macros · 1.2 MB</small></div></article>
+  <article><span class="motor-number">03</span><div><h3>Detalle de venta</h3><p>Productos, cantidades y horarios de venta.</p><a href="downloads/motores/Motor_03_Detalle_Productos.xlsm" download="Motor_03_Detalle_Productos.xlsm" type="application/vnd.ms-excel.sheet.macroEnabled.12">Descargar Motor 03 <span aria-hidden="true">↓</span></a><small>Excel con macros · 1.2 MB</small></div></article>
+ </div>
+ <a class="manual-download" href="downloads/Manual_Control_Ops_360.pdf" download="Manual_Control_Ops_360.pdf" type="application/pdf"><span><strong>Manual de Control Ops 360°</strong><small>Guía ilustrada · PDF · 10 páginas · 1.9 MB</small></span><span aria-hidden="true">↓</span></a>
+ <section class="back-guide" aria-labelledby="backGuideTitle"><h3 id="backGuideTitle">De la descarga a tu operación</h3><ol>
+  <li><strong>Guarda los tres Excel en Back.</strong><p>Crea una carpeta <b>Control Ops 360 · tu CeCo</b> en la computadora de Back. Conserva ahí tus archivos de trabajo; usa OneDrive de tienda si necesitas abrirlos desde otro dispositivo.</p></li>
+  <li><strong>Desbloquea cada archivo, si aparece la opción.</strong><p>Con Excel cerrado: clic derecho en el archivo → <b>Propiedades → Desbloquear → Aplicar</b>. Abre únicamente los motores de esta fuente autorizada.</p></li>
+  <li><strong>Actualiza desde Excel de escritorio.</strong><p>En Back, abre cada motor y pulsa el botón verde <b>ACTUALIZAR TODO de su portada</b>. Espera el mensaje <b>“Actualización terminada”</b> antes de seguir con el siguiente. Excel web y el celular no actualizan la conexión de Back.</p></li>
+  <li><strong>Valida, guarda y carga.</strong><p>Comprueba el mismo CeCo, registros y fecha en los tres motores. Guarda y espera la sincronización. Después abre Control Ops en el celular de tienda u otro equipo autorizado y carga los Excel actualizados.</p></li>
+ </ol><p class="history-note"><strong>Tu histórico crece en los mismos archivos.</strong> El arranque de transacciones y detalle consulta hasta 20 días atrás; uso y stock leen lo disponible en Back. Actualiza regularmente y guarda los mismos motores. Una descarga nueva empieza sin tu histórico; cambiar de CeCo reinicia el acumulado.</p></section>
+ <details class="resource-help"><summary>Si Excel pide permisos o no termina</summary><p>La primera vez puede solicitar permiso para la consulta nativa, la conexión y las macros del botón. Confirma la procedencia con tu líder y sigue el manual. Si aparece un error, no cargues esa actualización: conserva el archivo anterior y revisa la conexión en Back.</p><p>Las plantillas descargadas no incluyen registros operativos y pueden mostrar una tienda de referencia. El CeCo correcto debe aparecer después de actualizar en tu Back.</p></details>
+ <section class="resource-check" aria-labelledby="resourceCheckTitle"><h3 id="resourceCheckTitle">Antes de cargar, comprueba</h3><div><label><input type="checkbox" data-resource-check> Los tres motores muestran mi CeCo</label><label><input type="checkbox" data-resource-check> La actualización terminó sin errores</label><label><input type="checkbox" data-resource-check> Guardé y sincronicé los archivos</label></div><p id="resourceCheckStatus" role="status" aria-live="polite">0 de 3 comprobaciones marcadas por ti</p></section>
+ <footer class="resources-footer"><span>Procesamiento local · Tus Excel permanecen en tu dispositivo.</span><button id="uploadPreparedButton" class="primary" type="button">Cargar motores actualizados <span aria-hidden="true">↑</span></button></footer>
+</dialog>
 <dialog id="confirmation" aria-labelledby="confirmationTitle"><div class="confirm-icon">✓</div><h2 id="confirmationTitle">Tienda lista</h2><div id="confirmationContent"></div><button id="confirmButton" class="primary">Continuar</button></dialog>
 <dialog id="aboutDialog" class="about-dialog" aria-labelledby="aboutTitle"><div class="about-dialog-head"><span aria-hidden="true">i</span><div><small>GUÍA RÁPIDA</small><h2 id="aboutTitle">Acerca de esta pestaña</h2></div></div><p id="aboutIntro"></p><div id="aboutSteps" class="about-steps"></div><button id="closeAboutButton" class="primary">Entendido</button></dialog>
 <dialog id="resetConfirmation" aria-labelledby="resetTitle"><div class="confirm-icon reset-icon">↻</div><h2 id="resetTitle">¿Reiniciar datos locales?</h2><p>Se borrarán los Motores procesados, conteos, pedidos en tránsito, fechas y filtros guardados por Control Ops en este dispositivo.</p><p class="reset-note">Tus archivos Excel y PDF originales no se eliminan.</p><div class="dialog-actions"><button id="cancelResetButton">Conservar sesión</button><button id="confirmResetButton" class="danger">Sí, borrar y reiniciar</button></div></dialog>

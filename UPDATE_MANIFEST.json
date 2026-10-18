@@ -1,17 +1,23 @@
 {
   "schema_version": 2,
   "project": "sbx-mex/ControlOps-360",
-  "version": "7.4.1",
-  "baseline": "471fa6cad5ae958c90bcd640bec26becdb8a4786",
-  "date": "2026-09-23",
-  "release": "void-audit-by-check",
+  "version": "7.5.0",
+  "baseline": "146434035f4614d4f1045c867727bcb1fddc2501",
+  "date": "2026-10-18",
+  "release": "back-motors-and-manual",
   "update_policy": {
     "replacement": "atomic",
     "python_gate": "scripts/auditar_proyecto.py",
     "zip_builder": "scripts/crear_zip_seguro.py",
-    "operational_files_allowed": false
+    "operational_files_allowed": false,
+    "approved_empty_templates": "scripts/auditar_descargas.py"
   },
   "capabilities": [
+    "motor_downloads",
+    "visible_manual",
+    "back_update_guide",
+    "manual_preload_checks",
+    "unrefreshed_template_rejection",
     "available_tools_menu",
     "quick_filters",
     "maxmin",
@@ -63,6 +69,7 @@
     "void_audit"
   ],
   "continuity_matrix": [
+    {"module":"Motores y manual","current":"Tres plantillas originales y manual PDF","change":"Descarga, desbloqueo, actualización en Back e histórico en un apartado visible","validation":"Auditor Python de descargas, pruebas de interacción y parche aplicado sobre main"},
     {"module":"Resumen 360°","latest_request":"Menú limpio con acceso a Lay Out 2.0 y Code Brew","current":"Menú esencial y accesos directos con CeCo","gap":"Ninguno","change":"Retira Esfuerzo independiente y publica contexto directo para ambas aplicaciones","validation":"site tests y auditor Python"},
     {"module":"Interfaz y ayuda","latest_request":"Menos texto, más intuición y detalles simplificados","current":"Densidad compacta y ayuda contextual","gap":"Ninguno","change":"Icono superior de ayuda y guías breves por pestaña","validation":"site tests y revisión visual"},
     {"module":"Filtros","latest_request":"Selección múltiple sin cierre accidental y salida fácil","current":"Menú persistente con salida explícita","gap":"Ninguno","change":"Conserva el filtro abierto al marcar y cierra con Listo, Escape o clic exterior","validation":"site tests y auditor Python"},
@@ -93,6 +100,7 @@
   ],
   "validation": [
     "python -m unittest discover -s tests -v",
+    "python scripts/auditar_descargas.py --json",
     "python scripts/auditar_proyecto.py --json",
     "python scripts/auditar_peak_hour.py --json",
     "python scripts/auditar_rendimiento.py --json",
