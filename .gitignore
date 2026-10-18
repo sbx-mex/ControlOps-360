@@ -8,3 +8,6 @@ __pycache__/
 .DS_Store
 /ZIP_MANIFEST.sha256
 /ControlOps-360-v*.zip
+!downloads/motores/Motor_01_Auditoria_Transacciones.xlsm
+!downloads/motores/Motor_02_Uso_Stock.xlsm
+!downloads/motores/Motor_03_Detalle_Productos.xlsm
