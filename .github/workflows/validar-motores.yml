@@ -49,6 +49,7 @@ jobs:
       - name: Validar interfaz pública
         run: |
           node --check assets/app.js
+          node --check assets/resources.mjs
           node --check assets/cycle-tasks.mjs
           node --check assets/engine.mjs
           node --check assets/export.mjs
@@ -61,10 +62,7 @@ jobs:
           python scripts/auditar_proyecto.py --zip /tmp/ControlOps-360.zip --json
       - name: Impedir bases operativas
         run: |
-          if git ls-files | grep -Eiq '\.(xls|xlsx|xlsm|xlsb|csv|tsv)$'; then
-            echo "No se permiten archivos base u operativos en el repositorio."
-            exit 1
-          fi
+          python scripts/auditar_descargas.py --json
           if grep -nEi 'Exportar diagnóstico|demoButton|archivo_patron|Uso pendiente hoy|Base de vasos' index.html assets/app.js assets/engine.mjs assets/export.mjs assets/ui.mjs; then
             echo "Se detectó lógica obsoleta."
             exit 1
